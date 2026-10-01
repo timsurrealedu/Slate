@@ -169,8 +169,8 @@
   font-size: 9px;
 }
 .note-preview {
-  margin: 14px 17px 0;
-  padding: 17px;
+  margin: 10px 12px 0;
+  padding: 12px;
   background: var(--panel);
   min-height: 230px;
   position: relative;
@@ -179,9 +179,9 @@
   overflow: hidden;
 }
 .note-preview .mini-prose {
-  font-size: 7px;
+  font-size: 10px;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--text);
 }
 .note-preview .mini-prose h1 {
   font-family: var(--ui-font);
@@ -192,11 +192,11 @@
   font-weight: 600;
 }
 .note-preview .mini-prose h2 {
-  font-size: 9px;
-  margin: 13px 0 7px;
+  font-size: 11px;
+  margin: 10px 0 6px;
 }
 .note-preview .mini-prose h3 {
-  font-size: 8px;
+  font-size: 10px;
 }
 .note-preview .mini-prose p {
   margin: 0 0 7px;
@@ -243,22 +243,27 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 15px;
 }
-.folder-grid > button {
+.library-folder {
+  position: relative;
+  min-width: 0;
+}
+.library-folder > button:first-child {
+  width: 100%;
   display: flex;
   text-align: left;
   gap: 12px;
   align-items: center;
   min-width: 0;
-  padding: 13px 12px;
+  padding: 13px 40px 13px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
 }
-.folder-grid > button:hover {
+.library-folder > button:first-child:hover {
   background: var(--surface);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 }
-.folder-grid > button > span {
+.library-folder > button:first-child > span {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -274,6 +279,60 @@
 .folder-grid small {
   font-size: 9px;
   color: var(--muted);
+}
+.library-folder-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.folder-breadcrumbs,
+.folder-breadcrumbs > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.folder-breadcrumbs {
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+  margin: -12px 0 20px;
+}
+.folder-breadcrumbs button {
+  padding: 6px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.folder-breadcrumbs button:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+.folder-breadcrumbs [aria-current="page"] {
+  color: var(--text);
+}
+.preview-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-family: var(--ui-font);
+}
+.preview-tags:empty {
+  display: none;
+}
+.preview-tags .tag-link {
+  font-size: 9px;
+  padding: 1px 5px;
+  min-height: 0;
+}
+.note-preview .mini-prose ul,
+.note-preview .mini-prose ol {
+  margin: 4px 0 8px;
+  padding-left: 15px;
+}
+.note-preview .mini-prose li {
+  margin: 2px 0;
 }
 .collection-section {
   margin-top: 31px;

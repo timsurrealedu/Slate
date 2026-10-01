@@ -394,6 +394,37 @@ kbd {
   min-height: 36px;
   font-size: 12px;
 }
+.folder-navigation-row {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  min-width: 0;
+}
+.folder-navigation-row.active {
+  background: var(--selection);
+  color: var(--accent);
+}
+.folder-navigation-row .folder-navigation {
+  flex: 1;
+  min-width: 0;
+  padding-left: 3px;
+  padding-right: 3px;
+  text-align: left;
+}
+.folder-navigation-row .folder-disclosure,
+.folder-navigation-row .folder-more {
+  width: 24px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.folder-children {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+  margin-left: 11px;
+}
+.folder-children .sidebar-document {
+  padding-left: 8px;
+}
 .folder-navigation > span {
   overflow: hidden;
   text-overflow: ellipsis;

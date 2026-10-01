@@ -1,6 +1,7 @@
 import { StateField, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, WidgetType, EditorView, type DecorationSet } from "@codemirror/view";
-import { mathHtml, renderMarkdown } from "./render";
+import { mathHtml, renderMarkdown, metadataHtml, tagHtml } from "./render";
+import { frontmatter, inlineTag } from "./metadata";
 class PreviewWidget extends WidgetType {
   constructor(
     readonly html: string,
@@ -112,6 +113,14 @@ export function livePreview(open: (name: string) => void, assets: () => Map<stri
   });
   function build(state: EditorState): DecorationSet {
     const ranges: Range<Decoration>[] = [];
+    const metadata = frontmatter(state.doc.toString());
+    if (metadata)
+      ranges.push(
+        Decoration.replace({
+          widget: new PreviewWidget(metadataHtml(metadata.raw), 0),
+          block: true,
+        }).range(0, metadata.raw.trimEnd().length),
+      );
     const first = state.doc.lineAt(state.selection.main.from).number,
       last = state.doc.lineAt(state.selection.main.to).number;
     const active = (a: number, b = a) => a <= last && b >= first;
@@ -120,6 +129,7 @@ export function livePreview(open: (name: string) => void, assets: () => Map<stri
       const line = state.doc.line(number),
         text = line.text,
         offset = line.from;
+      if (metadata && offset < metadata.raw.trimEnd().length) continue;
       if (/^\s*(\x60{3,}|~{3,})/.test(text)) {
         inCode = !inCode;
         ranges.push(Decoration.line({ class: "cm-code-fence" }).range(offset));
@@ -261,6 +271,13 @@ export function livePreview(open: (name: string) => void, assets: () => Map<stri
           Decoration.replace({}).range(to - 1, to),
         );
       });
+      replacement(inlineTag, (match, from, to) =>
+        ranges.push(
+          Decoration.replace({
+            widget: new PreviewWidget(tagHtml(match[1]), from, "inline"),
+          }).range(from, to),
+        ),
+      );
       replacement(/\*\*([^*]+)\*\*|__([^_]+)__/g, (m, from, to) => {
         ranges.push(
           Decoration.replace({}).range(from, from + 2),

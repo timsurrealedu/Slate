@@ -119,23 +119,54 @@ public class SlateVaultPlugin extends Plugin {
             JSObject response = new JSObject(); response.put("base64", android.util.Base64.encodeToString(readBytes(document), android.util.Base64.NO_WRAP)); response.put("mime", mime); call.resolve(response);
         } catch (Exception error) { call.reject(error.getMessage(), error); }
     }); }
-    private void walk(Uri tree, Uri parent, String prefix, int depth, JSArray paths) throws Exception {
+    private void walk(Uri tree, Uri parent, String prefix, int depth, JSArray paths, boolean showHidden) throws Exception {
         if (depth > 32) throw new IllegalArgumentException("Too many vault folder levels.");
         for (Child child : children(tree, parent)) {
-            if (child.name.startsWith(".")) continue;
+            if (!showHidden && child.name.startsWith(".")) continue;
             if (paths.length() >= 20000) throw new IllegalArgumentException("Choose a vault with fewer than 20,000 notes.");
             String relative = prefix + child.name;
-            if (child.directory) { paths.put(relative + "/"); walk(tree, child.uri, relative + "/", depth + 1, paths); }
+            if (child.directory) { paths.put(relative + "/"); walk(tree, child.uri, relative + "/", depth + 1, paths, showHidden); }
             else if (child.name.matches("(?i).*\\.(md|markdown|txt|slate-notebook)$")) paths.put(relative);
         }
     }
     @PluginMethod public void list(PluginCall call) { worker.execute(() -> {
-        try { Uri tree = tree(call.getString("id")); JSArray paths = new JSArray(); walk(tree, DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree)), "", 0, paths); JSObject response = new JSObject(); response.put("paths", paths); call.resolve(response); }
+        try { Uri tree = tree(call.getString("id")); JSArray paths = new JSArray(); walk(tree, DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree)), "", 0, paths, call.getBoolean("showHidden", false)); JSObject response = new JSObject(); response.put("paths", paths); call.resolve(response); }
         catch (Exception error) { call.reject("Reconnect the vault to read this folder: " + error.getMessage(), error); }
     }); }
     @PluginMethod public void read(PluginCall call) { worker.execute(() -> {
         try { Uri tree = tree(call.getString("id")); JSObject response = new JSObject(); response.put("text", readText(find(tree, call.getString("path"), false))); call.resolve(response); }
         catch (Exception error) { call.reject(error.getMessage(), error); }
+    }); }
+    private Uri parent(Uri tree, String relative) throws Exception {
+        int slash = relative.lastIndexOf('/');
+        return slash < 0 ? DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree)) : find(tree, relative.substring(0, slash), false);
+    }
+    @PluginMethod public void mkdir(PluginCall call) { worker.execute(() -> {
+        try {
+            String relative = call.getString("path"); String[] parts = path(relative); Uri tree = tree(call.getString("id")), owner = parent(tree, relative); String name = parts[parts.length - 1];
+            for (Child child : children(tree, owner)) if (child.name.equalsIgnoreCase(name)) throw new IllegalStateException("A file or folder with that name already exists here.");
+            Uri created = DocumentsContract.createDocument(getContext().getContentResolver(), owner, DocumentsContract.Document.MIME_TYPE_DIR, name);
+            if (created == null || !displayName(created).equals(name)) throw new IllegalStateException("The provider could not create that folder name. Refresh the vault.");
+            call.resolve();
+        } catch (Exception error) { call.reject(error.getMessage(), error); }
+    }); }
+    @PluginMethod public void rename(PluginCall call) { worker.execute(() -> {
+        try {
+            String relative = call.getString("path"), nextPath = call.getString("nextPath"); String[] parts = path(relative), next = path(nextPath);
+            String oldParent = relative.substring(0, relative.length() - parts[parts.length - 1].length()), newParent = nextPath.substring(0, nextPath.length() - next[next.length - 1].length());
+            if (!oldParent.equals(newParent)) throw new IllegalArgumentException("Rename within the same folder.");
+            Uri tree = tree(call.getString("id")), owner = parent(tree, relative), document = find(tree, relative, false); String name = next[next.length - 1];
+            for (Child child : children(tree, owner)) if (!child.name.equals(parts[parts.length - 1]) && child.name.equalsIgnoreCase(name)) throw new IllegalStateException("A file or folder with that name already exists here.");
+            boolean directory = call.getBoolean("directory", false);
+            if (!directory && (call.getString("expected") == null || !Objects.equals(readText(document), call.getString("expected")))) throw new IllegalStateException("Vault conflict: the original file changed.");
+            Uri renamed = DocumentsContract.renameDocument(getContext().getContentResolver(), document, name);
+            if (renamed == null) throw new IllegalStateException("This folder provider does not support renaming.");
+            if (!displayName(renamed).equals(name)) {
+                DocumentsContract.renameDocument(getContext().getContentResolver(), renamed, parts[parts.length - 1]);
+                throw new IllegalStateException("The provider changed that name. Refresh the vault before trying again.");
+            }
+            call.resolve();
+        } catch (Exception error) { call.reject(error.getMessage(), error); }
     }); }
     @PluginMethod public void write(PluginCall call) { worker.execute(() -> {
         Uri temporary = null, backup = null; String name = null;

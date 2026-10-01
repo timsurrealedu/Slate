@@ -13,7 +13,7 @@ import {
   Command,
 } from "lucide-react";
 import { Modal, KindIcon } from "./shared";
-import { useWorkspace } from "../core/workspace";
+import { useVisibleWorkspace } from "../core/workspace";
 import type { SlateDocument } from "../core/model";
 interface Props {
   open: boolean;
@@ -30,7 +30,7 @@ interface Result {
   excerpt: string;
 }
 export function CommandPalette(props: Props) {
-  const { documents } = useWorkspace();
+  const { documents } = useVisibleWorkspace();
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<Result[]>([]),
     [selected, setSelected] = useState(0);
@@ -49,6 +49,9 @@ export function CommandPalette(props: Props) {
     return () => w.terminate();
   }, []);
   useEffect(() => {
+    const ids = new Set(documents.map((doc) => doc.id));
+    const removed = [...cache.current.keys()].filter((id) => !ids.has(id));
+    for (const id of removed) cache.current.delete(id);
     const changed = documents
       .filter((d) => {
         const previous = cache.current.get(d.id);
@@ -68,7 +71,8 @@ export function CommandPalette(props: Props) {
         trashedAt: d.trashedAt,
         updatedAt: d.updatedAt,
       }));
-    if (changed.length) worker.current?.postMessage({ type: "index", documents: changed });
+    if (changed.length || removed.length)
+      worker.current?.postMessage({ type: "index", documents: changed, removed });
   }, [documents]);
   useEffect(() => {
     if (props.open) {

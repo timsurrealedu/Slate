@@ -48,13 +48,13 @@ function createVaultStore(configPath) {
     }
     return current;
   }
-  async function list({ id }) {
+  async function list({ id, showHidden = false }) {
     if (!Object.hasOwn(roots, id)) throw new Error("Reopen this vault to allow folder access.");
     const paths = [];
     async function walk(directory, prefix, depth) {
       if (depth > 32) throw new Error("Too many vault folder levels.");
       for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-        if (entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
+        if ((!showHidden && entry.name.startsWith(".")) || entry.isSymbolicLink()) continue;
         if (paths.length >= 20000)
           throw new Error("Open a vault containing fewer than 20,000 notes.");
         const relative = prefix + entry.name;
@@ -124,6 +124,37 @@ function createVaultStore(configPath) {
       throw new Error("Choose an image smaller than 20 MB.");
     return { base64: (await fs.readFile(file)).toString("base64"), mime };
   }
-  return { load, authorize, list, read, write, asset };
+  async function mkdir({ id, path: relative }) {
+    const directory = await target(id, relative);
+    await fs.mkdir(directory);
+  }
+  async function rename({ id, path: relative, nextPath, directory, expected }) {
+    safePath(nextPath);
+    if (path.posix.dirname(relative) !== path.posix.dirname(nextPath))
+      throw new Error("Rename within the same folder.");
+    const source = await target(id, relative),
+      destination = await target(id, nextPath);
+    const info = await fs.lstat(source);
+    if (info.isDirectory() !== directory || (!directory && !info.isFile()))
+      throw new Error("The vault item changed. Refresh the vault.");
+    const originalName = path.basename(source),
+      nextName = path.basename(destination);
+    if (originalName === nextName) return;
+    const entries = await fs.readdir(path.dirname(destination));
+    if (
+      entries.some(
+        (name) =>
+          name !== originalName && name.toLocaleLowerCase() === nextName.toLocaleLowerCase(),
+      )
+    )
+      throw new Error("A file or folder with that name already exists here.");
+    if (
+      !directory &&
+      (typeof expected !== "string" || (await read({ id, path: relative })).text !== expected)
+    )
+      throw new Error("Vault conflict: the original file changed.");
+    await fs.rename(source, destination);
+  }
+  return { load, authorize, list, read, write, asset, mkdir, rename };
 }
 module.exports = { createVaultStore, safePath };

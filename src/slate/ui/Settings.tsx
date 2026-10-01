@@ -84,6 +84,26 @@ export function Settings(props: Props) {
       <div className="settings-scroll">
         <section>
           <h3>Appearance</h3>
+          <label className="settings-field">
+            Show hidden files
+            <input
+              type="checkbox"
+              checked={preferences.showHiddenFiles}
+              disabled={!!busy}
+              onChange={async (event) => {
+                const showHiddenFiles = event.target.checked;
+                setBusy("hidden-files");
+                setError("");
+                try {
+                  await workspace.preferences({ showHiddenFiles });
+                } catch (error) {
+                  setError(error instanceof Error ? error.message : "Could not show hidden files.");
+                } finally {
+                  setBusy("");
+                }
+              }}
+            />
+          </label>
           <div className="theme-options">
             {[
               { id: "light", icon: Sun, name: "Light" },

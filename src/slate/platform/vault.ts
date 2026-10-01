@@ -1,5 +1,5 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { readMeta, writeMeta, docSchema } from "../core/storage";
+import { readMeta, writeMeta, docSchema, readWorkspace } from "../core/storage";
 import { makeDocument, type Folder, type SlateDocument } from "../core/model";
 
 export interface VaultConnection {
@@ -17,7 +17,15 @@ interface FileHandle extends FileSystemFileHandle {
 }
 interface VaultBridge {
   open(): Promise<VaultConnection | { cancelled: boolean }>;
-  list(options: { id: string }): Promise<{ paths: string[] }>;
+  list(options: { id: string; showHidden?: boolean }): Promise<{ paths: string[] }>;
+  mkdir(options: { id: string; path: string }): Promise<void>;
+  rename(options: {
+    id: string;
+    path: string;
+    nextPath: string;
+    directory: boolean;
+    expected?: string;
+  }): Promise<void>;
   read(options: { id: string; path: string }): Promise<{ text: string }>;
   asset(options: { id: string; path: string }): Promise<{ base64: string; mime: string }>;
   write(options: {
@@ -138,17 +146,17 @@ export const vault = {
     if ((await active.handle.queryPermission({ mode: "readwrite" })) === "granted") return true;
     return (await active.handle.requestPermission({ mode: "readwrite" })) === "granted";
   },
-  async paths(): Promise<string[]> {
+  async paths(showHidden = false): Promise<string[]> {
     if (!active) return [];
     if (!active.handle)
-      return (await bridge()!.list({ id: active.id })).paths.map((path) =>
+      return (await bridge()!.list({ id: active.id, showHidden })).paths.map((path) =>
         path.endsWith("/") ? safeVaultPath(path.slice(0, -1)) + "/" : safeVaultPath(path),
       );
     const paths: string[] = [];
     async function walk(handle: DirectoryHandle, prefix: string, depth: number) {
       if (depth > 32) throw new Error("This vault has more than 32 nested folder levels.");
       for await (const entry of handle.values()) {
-        if (entry.name.startsWith(".")) continue;
+        if (!showHidden && entry.name.startsWith(".")) continue;
         const path = safeVaultPath(prefix + entry.name);
         if (paths.length >= 20000)
           throw new Error("Open a folder containing fewer than 20,000 notes.");
@@ -167,6 +175,51 @@ export const vault = {
     for (const part of parts.slice(0, -1))
       directory = (await directory.getDirectoryHandle(part, { create })) as DirectoryHandle;
     return directory.getFileHandle(parts[parts.length - 1], { create }) as Promise<FileHandle>;
+  },
+  async directory(path: string): Promise<DirectoryHandle> {
+    let directory = active!.handle!;
+    if (path)
+      for (const part of safeVaultPath(path).split("/"))
+        directory = (await directory.getDirectoryHandle(part)) as DirectoryHandle;
+    return directory;
+  },
+  async mkdir(path: string) {
+    if (!active) throw new Error("Open the vault before creating folders.");
+    safeVaultPath(path);
+    if (!active.handle) return bridge()!.mkdir({ id: active.id, path });
+    const parts = path.split("/"),
+      name = parts.pop()!,
+      parent = await vault.directory(parts.join("/"));
+    for await (const entry of parent.values())
+      if (entry.name.toLocaleLowerCase() === name.toLocaleLowerCase())
+        throw new Error("A file or folder with that name already exists here.");
+    await parent.getDirectoryHandle(name, { create: true });
+  },
+  async rename(path: string, nextPath: string, directory: boolean, docId?: string) {
+    if (!active) throw new Error("Open the vault before renaming files.");
+    safeVaultPath(path);
+    safeVaultPath(nextPath);
+    if (path.split("/").slice(0, -1).join("/") !== nextPath.split("/").slice(0, -1).join("/"))
+      throw new Error("Rename within the same folder.");
+    const expected = docId ? await readMeta<string>("vault-original:" + docId) : undefined;
+    if (!active.handle)
+      return bridge()!.rename({ id: active.id, path, nextPath, directory, expected });
+    if (!directory && (expected === undefined || (await vault.read(path)) !== expected))
+      throw new VaultConflict();
+    await renameBrowserItem(
+      await vault.directory(path.split("/").slice(0, -1).join("/")),
+      path.split("/").pop()!,
+      nextPath.split("/").pop()!,
+      directory,
+    );
+  },
+  async remapOriginals(oldPath?: string, nextPath?: string) {
+    if (!oldPath || !nextPath) return;
+    for (const [path, text] of [...originals])
+      if (path === oldPath || path.startsWith(oldPath + "/")) {
+        originals.set(nextPath + path.slice(oldPath.length), text);
+        originals.delete(path);
+      }
   },
   async read(path: string): Promise<string> {
     if (!active) throw new Error("Open the vault before reading its files.");
@@ -216,7 +269,7 @@ export const vault = {
       }
     }
     originals.set(path, null);
-    const id = "vault-note-" + (await stableId(active.id + ":" + path));
+    const id = doc.id;
     await writeMeta("vault-original:" + id, null);
     return { ...doc, id, source: { vaultId: active.id, path } };
   },
@@ -260,12 +313,13 @@ export const vault = {
     originals.set(path, text);
     await writeMeta("vault-original:" + doc.id, text);
   },
-  async index(connection: VaultConnection) {
+  async index(connection: VaultConnection, showHidden = false) {
     const previous = active;
     active = connection;
     try {
       if (!(await vault.permission())) throw new Error("Allow folder access to open this vault.");
-      const paths = await vault.paths(),
+      const saved = await readWorkspace();
+      const paths = await vault.paths(showHidden),
         folders: Folder[] = [],
         documents: SlateDocument[] = [],
         baselines: [string, string][] = [];
@@ -278,15 +332,20 @@ export const vault = {
       }
       for (const path of folderPaths)
         folders.push({
-          id: "vault-folder-" + (await stableId(connection.id + ":" + path)),
-          name: path,
+          id:
+            saved.folders.find((folder) => folder.vaultId === connection.id && folder.path === path)
+              ?.id || "vault-folder-" + (await stableId(connection.id + ":" + path)),
+          name: path.split("/").pop()!,
           color: "#385775",
           vaultId: connection.id,
           path,
         });
       for (const path of paths.filter((path) => !path.endsWith("/"))) {
         const text = await vault.read(path),
-          id = "vault-note-" + (await stableId(connection.id + ":" + path));
+          id =
+            saved.documents.find(
+              (doc) => doc.source?.vaultId === connection.id && doc.source.path === path,
+            )?.id || "vault-note-" + (await stableId(connection.id + ":" + path));
         const parent = path.split("/").slice(0, -1).join("/");
         let doc = makeDocument(
           "note",
@@ -313,3 +372,126 @@ export const vault = {
     }
   },
 };
+
+async function equalFiles(left: File, right: File) {
+  if (left.size !== right.size) return false;
+  for (let offset = 0; offset < left.size; offset += 1024 * 1024) {
+    const [a, b] = await Promise.all([
+      left.slice(offset, offset + 1024 * 1024).arrayBuffer(),
+      right.slice(offset, offset + 1024 * 1024).arrayBuffer(),
+    ]);
+    const bytes = new Uint8Array(a),
+      other = new Uint8Array(b);
+    if (bytes.some((value, index) => value !== other[index])) return false;
+  }
+  return true;
+}
+
+// External browser folders have no portable atomic rename. Copy and verify every byte
+// first, then remove individual original entries; concurrent additions are never recursively deleted.
+async function renameBrowserItem(
+  parent: DirectoryHandle,
+  name: string,
+  nextName: string,
+  directory: boolean,
+) {
+  if (name === nextName) return;
+  for await (const entry of parent.values())
+    if (entry.name.toLocaleLowerCase() === nextName.toLocaleLowerCase())
+      throw new Error(
+        "A file or folder with that name already exists here. For a capitalization change, use an intermediate name.",
+      );
+  const files: {
+    source: FileHandle;
+    file: File;
+    parent: DirectoryHandle;
+    name: string;
+    parts: string[];
+    destination?: FileHandle;
+  }[] = [];
+  const directories: {
+    parent: DirectoryHandle;
+    name: string;
+    parts: string[];
+    handle: DirectoryHandle;
+    entries: string[];
+  }[] = [];
+  async function gather(
+    owner: DirectoryHandle,
+    childName: string,
+    parts: string[],
+    isDirectory: boolean,
+  ) {
+    if (parts.length > 32 || files.length + directories.length >= 20000)
+      throw new Error("Rename a folder with fewer than 20,000 entries and 33 levels.");
+    if (!isDirectory) {
+      const source = (await owner.getFileHandle(childName)) as FileHandle;
+      files.push({ source, file: await source.getFile(), parent: owner, name: childName, parts });
+      return;
+    }
+    const handle = (await owner.getDirectoryHandle(childName)) as DirectoryHandle,
+      entries: string[] = [];
+    directories.push({ parent: owner, name: childName, parts, handle, entries });
+    for await (const entry of handle.values()) {
+      safeVaultPath(entry.name);
+      entries.push(entry.kind + ":" + entry.name);
+      await gather(handle, entry.name, [...parts, entry.name], entry.kind === "directory");
+    }
+  }
+  await gather(parent, name, [], directory);
+  let destination: DirectoryHandle = parent;
+  try {
+    if (directory)
+      destination = (await parent.getDirectoryHandle(nextName, {
+        create: true,
+      })) as DirectoryHandle;
+    for (const folder of directories.slice(1)) {
+      let owner = destination;
+      for (const part of folder.parts)
+        owner = (await owner.getDirectoryHandle(part, { create: true })) as DirectoryHandle;
+    }
+    for (const entry of files) {
+      let owner = destination;
+      for (const part of entry.parts.slice(0, -1))
+        owner = (await owner.getDirectoryHandle(part)) as DirectoryHandle;
+      entry.destination = (await owner.getFileHandle(directory ? entry.name : nextName, {
+        create: true,
+      })) as FileHandle;
+      if ((await entry.destination.getFile()).size)
+        throw new Error("The destination changed during the rename.");
+      const stream = await entry.destination.createWritable();
+      try {
+        await stream.write(entry.file);
+        await stream.close();
+      } catch (error) {
+        await stream.abort().catch(() => {});
+        throw error;
+      }
+      if (!(await equalFiles(entry.file, await entry.destination.getFile())))
+        throw new Error("The copied file could not be verified.");
+    }
+    for (const folder of directories) {
+      const entries: string[] = [];
+      for await (const entry of folder.handle.values()) entries.push(entry.kind + ":" + entry.name);
+      if (JSON.stringify(entries.sort()) !== JSON.stringify(folder.entries.sort()))
+        throw new Error("The original folder changed during the rename.");
+    }
+    for (const entry of files)
+      if (!(await equalFiles(entry.file, await entry.source.getFile())))
+        throw new Error("The original file changed during the rename.");
+    for (const entry of files) {
+      if (
+        !(await equalFiles(entry.file, await entry.source.getFile())) ||
+        !(await equalFiles(entry.file, await entry.destination!.getFile()))
+      )
+        throw new Error("A file changed during the rename.");
+      await entry.parent.removeEntry(entry.name);
+    }
+    for (const folder of directories.reverse()) await folder.parent.removeEntry(folder.name);
+  } catch (error) {
+    throw new Error(
+      (error instanceof Error ? error.message : "Could not rename this item.") +
+        " Original or verified copied files were retained. Refresh the vault before retrying.",
+    );
+  }
+}

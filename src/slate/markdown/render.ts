@@ -1,6 +1,7 @@
 import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import katex from "katex";
+import { frontmatter, metadataTags, inlineTag } from "./metadata";
 const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 export const mathHtml = (text: string, display = false) =>
@@ -12,6 +13,28 @@ export const mathHtml = (text: string, display = false) =>
     output: "htmlAndMathml",
   });
 const markdown = new Marked({ gfm: true, breaks: false });
+export const tagHtml = (tag: string) =>
+  '<a class="tag-link" href="#slate-tag=' +
+  encodeURIComponent(tag) +
+  '" data-tag="' +
+  escape(tag) +
+  '" aria-label="Show notes tagged ' +
+  escape(tag) +
+  '">#' +
+  escape(tag) +
+  "</a>";
+export function metadataHtml(source: string) {
+  const metadata = frontmatter(source);
+  if (!metadata) return "";
+  const tags = metadataTags(metadata.properties);
+  return (
+    '<div class="note-metadata" aria-label="Note properties">' +
+    (tags.length ? '<div class="note-tags">' + tags.map(tagHtml).join("") + "</div>" : "") +
+    '<button class="metadata-source" data-metadata-source="true" type="button">' +
+    (metadata.error ? "Review note properties" : "Edit properties") +
+    "</button></div>"
+  );
+}
 export function localImageReferences(source: string) {
   return [
     ...new Set([
@@ -87,7 +110,8 @@ markdown.use({
 });
 export function renderMarkdown(source: string, assets?: Map<string, string>, numbered = false) {
   if (typeof window === "undefined") return "";
-  let text = source.replace(/!\[\[([^\]\n]+)\]\]/g, (_raw, inner: string) => {
+  const metadata = frontmatter(source);
+  let text = (metadata?.body ?? source).replace(/!\[\[([^\]\n]+)\]\]/g, (_raw, inner: string) => {
     const [path, label] = inner.split("|");
     return "![" + (label || path).replace(/[\[\]]/g, "") + "](<" + path.replace(/[<>]/g, "") + ">)";
   });
@@ -95,7 +119,7 @@ export function renderMarkdown(source: string, assets?: Map<string, string>, num
   let html: string;
   if (numbered) {
     const tokens = markdown.lexer(text);
-    let line = 1;
+    let line = 1 + (metadata?.lines || 0);
     html = tokens
       .map((token) => {
         const start = line;
@@ -114,6 +138,7 @@ export function renderMarkdown(source: string, assets?: Map<string, string>, num
       })
       .join("");
   } else html = markdown.parse(text) as string;
+  html = metadataHtml(source) + html;
   const clean = DOMPurify.sanitize(html, {
     ADD_ATTR: ["data-note"],
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
@@ -145,11 +170,33 @@ export function renderMarkdown(source: string, assets?: Map<string, string>, num
       ),
     );
   template.content.querySelectorAll("a").forEach((a) => {
-    if (!a.dataset.note) {
+    if (!a.dataset.note && !a.dataset.tag) {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
     }
   });
+  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT),
+    nodes: Text[] = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (!node.parentElement?.closest("a,code,pre,button,.katex,.note-metadata")) nodes.push(node);
+  }
+  for (const node of nodes) {
+    const value = node.textContent || "",
+      matches = [...value.matchAll(inlineTag)];
+    if (!matches.length) continue;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    for (const match of matches) {
+      fragment.append(document.createTextNode(value.slice(offset, match.index)));
+      const link = document.createElement("template");
+      link.innerHTML = tagHtml(match[1]);
+      fragment.append(link.content);
+      offset = match.index! + match[0].length;
+    }
+    fragment.append(document.createTextNode(value.slice(offset)));
+    node.replaceWith(fragment);
+  }
   return template.innerHTML;
 }
 export function sanitizeDocx(html: string) {

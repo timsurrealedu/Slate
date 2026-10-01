@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { zipSync, strToU8 } from "fflate";
 import { workspace } from "../src/slate/core/workspace";
 import { vault } from "../src/slate/platform/vault";
+import { folderChildren, folderTrail, visibleWorkspace } from "../src/slate/core/folders";
 import * as storage from "../src/slate/core/storage";
 import { importFlexcil } from "../src/slate/import/flexcil/importer";
 const { createVaultStore } = createRequire(import.meta.url)("../platform/desktop/vault.cjs");
@@ -19,6 +20,120 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals();
   await rm(temporary, { recursive: true, force: true });
+});
+
+it("renames nested vault items without losing bytes, identities, history or hidden assets", async () => {
+  const root = join(temporary, "Vault");
+  await mkdir(join(root, "Course", "Sub", ".private"), { recursive: true });
+  const text = "---\ntags: [study, math]\n---\n# Original\n";
+  await writeFile(join(root, "Course", "Sub", "Untitled note.md"), text);
+  await writeFile(
+    join(root, "Course", "Sub", ".private", "asset.bin"),
+    new Uint8Array([0, 255, 12, 88]),
+  );
+  const store = createVaultStore(join(temporary, "roots.json"));
+  vi.stubGlobal("window", { slateVault: store });
+  const connection = await store.authorize(root);
+  await workspace.openVault(connection);
+  const note = workspace.get().documents[0],
+    course = workspace.get().folders.find((folder) => folder.path === "Course")!;
+  const sub = workspace.get().folders.find((folder) => folder.path === "Course/Sub")!;
+  expect(folderChildren(workspace.get().folders).map((folder) => folder.id)).toEqual([course.id]);
+  expect(folderTrail(sub, workspace.get().folders).map((folder) => folder.id)).toEqual([
+    course.id,
+    sub.id,
+  ]);
+  workspace.update(note.id, { starred: true });
+  await workspace.renameDocument(note.id, "Lesson");
+  expect(await readFile(join(root, "Course", "Sub", "Lesson.md"), "utf8")).toBe(text);
+  await expect(readFile(join(root, "Course", "Sub", "Untitled note.md"))).rejects.toThrow();
+  const replacement = await workspace.create("note", sub.id);
+  expect(replacement.id).not.toBe(note.id);
+  workspace.update(replacement.id, { content: "Different note" });
+  await workspace.flush();
+  await workspace.renameFolder(course.id, "Studies");
+  expect([...(await readFile(join(root, "Studies", "Sub", ".private", "asset.bin")))]).toEqual([
+    0, 255, 12, 88,
+  ]);
+  await workspace.openVault(connection);
+  expect(workspace.get().documents.find((doc) => doc.id === note.id)).toMatchObject({
+    title: "Lesson",
+    content: text,
+    starred: true,
+    source: { path: "Studies/Sub/Lesson.md" },
+  });
+  expect(workspace.get().documents.find((doc) => doc.id === replacement.id)?.content).toBe(
+    "Different note",
+  );
+  expect(workspace.get().folders.find((folder) => folder.path === "Studies")?.id).toBe(course.id);
+  expect(workspace.get().folders.find((folder) => folder.path === "Studies/Sub")?.id).toBe(sub.id);
+  expect((await storage.getRevisions(note.id)).length).toBeGreaterThan(0);
+  workspace.update(note.id, { content: text + "Written after rename" });
+  await workspace.flush();
+  expect(await readFile(join(root, "Studies", "Sub", "Lesson.md"), "utf8")).toContain(
+    "Written after rename",
+  );
+});
+
+it("rejects rename collisions and external edits while leaving both originals intact", async () => {
+  const root = join(temporary, "Vault");
+  await mkdir(join(root, "A"), { recursive: true });
+  await mkdir(join(root, "B"));
+  await writeFile(join(root, "A", "First.md"), "First");
+  await writeFile(join(root, "A", "Second.md"), "Second");
+  const store = createVaultStore(join(temporary, "roots.json"));
+  vi.stubGlobal("window", { slateVault: store });
+  await workspace.openVault(await store.authorize(root));
+  const note = workspace.get().documents.find((doc) => doc.title === "First")!;
+  await expect(workspace.renameDocument(note.id, "Second")).rejects.toThrow("already exists");
+  const folder = workspace.get().folders.find((folder) => folder.path === "A")!;
+  await expect(workspace.renameFolder(folder.id, "B")).rejects.toThrow("already exists");
+  await expect(workspace.renameFolder(folder.id, "../Outside")).rejects.toThrow();
+  await writeFile(join(root, "A", "First.md"), "External edit");
+  await expect(workspace.renameDocument(note.id, "Renamed")).rejects.toThrow(/conflict/i);
+  expect(await readFile(join(root, "A", "First.md"), "utf8")).toBe("External edit");
+  expect(await readFile(join(root, "A", "Second.md"), "utf8")).toBe("Second");
+});
+
+it("can reveal dot-prefixed vault files without deleting them when hidden again", async () => {
+  const root = join(temporary, "Vault");
+  await mkdir(join(root, ".private", "Sub"), { recursive: true });
+  await writeFile(join(root, ".private", "Sub", "Secret.md"), "Hidden descendant");
+  await writeFile(join(root, ".hidden.md"), "Hidden file");
+  await writeFile(join(root, "Visible.md"), "Visible");
+  const store = createVaultStore(join(temporary, "roots.json"));
+  vi.stubGlobal("window", { slateVault: store });
+  await workspace.openVault(await store.authorize(root));
+  expect(workspace.get().documents).toHaveLength(1);
+  await workspace.preferences({ showHiddenFiles: true });
+  expect(workspace.get().documents).toHaveLength(3);
+  await workspace.preferences({ showHiddenFiles: false });
+  const data = workspace.get();
+  expect(
+    visibleWorkspace(data.documents, data.folders, false).documents.map((doc) => doc.title),
+  ).toEqual(["Visible"]);
+  expect(visibleWorkspace(data.documents, data.folders, false).folders).toHaveLength(0);
+  await workspace.openVault(data.vault);
+  expect((await storage.readWorkspace()).documents.filter((doc) => doc.source)).toHaveLength(3);
+  expect(await readFile(join(root, ".hidden.md"), "utf8")).toBe("Hidden file");
+});
+
+it("retains local nested folders and remaps their parents when restoring a backup", async () => {
+  const parent = await workspace.addFolder("Projects"),
+    child = await workspace.addFolder("Ideas", parent.id);
+  const note = await workspace.create("note", child.id);
+  await workspace.renameFolder(parent.id, "Research");
+  await workspace.renameDocument(note.id, "Concept");
+  const backup = await workspace.backup();
+  await workspace.restore(backup);
+  const restored = workspace.get().folders.find((folder) => folder.name === "Ideas (restored)")!;
+  expect(folderTrail(restored, workspace.get().folders).map((folder) => folder.name)).toEqual([
+    "Research (restored)",
+    "Ideas (restored)",
+  ]);
+  expect(workspace.get().documents.find((doc) => doc.folderId === restored.id)?.title).toBe(
+    "Concept",
+  );
 });
 
 it("opens nested vaults, saves original Markdown, reconnects, and retains the local workspace", async () => {

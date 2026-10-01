@@ -5,4 +5,6 @@ contextBridge.exposeInMainWorld("slateVault", {
   read: (options) => ipcRenderer.invoke("slate-vault", "read", options),
   asset: (options) => ipcRenderer.invoke("slate-vault", "asset", options),
   write: (options) => ipcRenderer.invoke("slate-vault", "write", options),
+  mkdir: (options) => ipcRenderer.invoke("slate-vault", "mkdir", options),
+  rename: (options) => ipcRenderer.invoke("slate-vault", "rename", options),
 });

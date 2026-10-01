@@ -62,7 +62,7 @@ else {
           if (result.canceled || !result.filePaths[0]) return { cancelled: true };
           return vaultStore.authorize(result.filePaths[0]);
         }
-        if (!["list", "read", "write", "asset"].includes(action))
+        if (!["list", "read", "write", "asset", "mkdir", "rename"].includes(action))
           throw new Error("Unknown folder action.");
         return vaultStore[action](options);
       });
@@ -123,6 +123,23 @@ else {
       window.webContents.setWindowOpenHandler(({ url }) => {
         external(url);
         return { action: "deny" };
+      });
+      window.webContents.on("context-menu", (_event, params) => {
+        if (!params.isEditable) {
+          if (params.selectionText)
+            Menu.buildFromTemplate([{ role: "copy" }, { role: "selectAll" }]).popup({ window });
+          return;
+        }
+        Menu.buildFromTemplate([
+          { role: "undo" },
+          { role: "redo" },
+          { type: "separator" },
+          { role: "cut" },
+          { role: "copy" },
+          { role: "paste" },
+          { type: "separator" },
+          { role: "selectAll" },
+        ]).popup({ window });
       });
       window.webContents.on("will-navigate", (event, url) => {
         if (new URL(url).origin !== ORIGIN) {

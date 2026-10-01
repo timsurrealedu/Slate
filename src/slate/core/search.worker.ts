@@ -10,6 +10,7 @@ const normalize = (s: string) => s.normalize("NFKD").replace(/\p{M}/gu, "").toLo
 self.onmessage = (event) => {
   const { type, documents, query, requestId } = event.data;
   if (type === "index") {
+    for (const id of event.data.removed || []) index.delete(id);
     for (const d of documents as IndexedDoc[])
       index.set(d.id, {
         ...d,

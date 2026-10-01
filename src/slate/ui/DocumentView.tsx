@@ -16,7 +16,7 @@ import {
   ListOrdered,
 } from "lucide-react";
 import type { SlateDocument } from "../core/model";
-import { workspace, useWorkspace } from "../core/workspace";
+import { workspace, useVisibleWorkspace } from "../core/workspace";
 import { MarkdownEditor, type MarkdownHandle, type EditorMode } from "../markdown/MarkdownEditor";
 import { Notebook } from "./Notebook";
 import { IconButton, Floating } from "./shared";
@@ -27,6 +27,7 @@ export function DocumentView({
   doc,
   active,
   onLink,
+  onTag,
   onToast,
   onImage,
   editorRef,
@@ -34,11 +35,12 @@ export function DocumentView({
   doc: SlateDocument;
   active: boolean;
   onLink(name: string): void;
+  onTag(name: string): void;
   onToast(text: string, undo?: () => void): void;
   onImage(): void;
   editorRef?: React.RefObject<MarkdownHandle | null>;
 }) {
-  const { documents, preferences } = useWorkspace();
+  const { documents, preferences } = useVisibleWorkspace();
   const localRef = useRef<MarkdownHandle>(null),
     ref = editorRef || localRef;
   const [mode, setMode] = useState<EditorMode>("live");
@@ -233,6 +235,11 @@ export function DocumentView({
         sourcePath={doc.source?.path}
         onChange={(content) => workspace.update(doc.id, { content })}
         onLink={onLink}
+        onTag={onTag}
+        onProperties={() => {
+          setMode("source");
+          setTimeout(() => ref.current?.goToLine(2), 50);
+        }}
       />
       {composer === "table" && (
         <TableComposer

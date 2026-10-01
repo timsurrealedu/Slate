@@ -853,3 +853,55 @@
   .editor-options .icon-button, .format-tools .icon-button { min-width: 44px; min-height: 44px; }
   .equation-templates button, .note-layout-controls select { min-height: 44px; }
 }
+.note-metadata {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  font-family: var(--ui-font);
+}
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  background: var(--accent-wash);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  line-height: 1.5;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.tag-link:hover {
+  background: var(--selection);
+}
+.metadata-source {
+  font-family: var(--ui-font);
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.metadata-source:hover {
+  color: var(--accent);
+  background: var(--hover);
+}
+@media (pointer: coarse) {
+  .note-metadata .tag-link,
+  .metadata-source,
+  .folder-breadcrumbs button,
+  .folder-navigation-row .folder-disclosure,
+  .folder-navigation-row .folder-more,
+  .library-folder-actions {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

@@ -279,6 +279,7 @@ const manifestSchema = z.object({
         id: z.string().max(200),
         name: z.string().max(1000),
         color: z.string().regex(/^#[0-9a-f]{6}$/i),
+        parentId: z.string().max(200).nullable().optional(),
       }),
     )
     .max(10000),
@@ -300,6 +301,7 @@ const manifestSchema = z.object({
     workspaceName: z.string().max(200),
     lineNumbers: z.boolean().default(false),
     vim: z.boolean().default(false),
+    showHiddenFiles: z.boolean().default(false),
     editorWidth: z.number().min(360).max(1600).default(850),
     editorMarginLeft: z.number().min(0).max(200).default(50),
     editorMarginRight: z.number().min(0).max(200).default(50),
@@ -405,6 +407,8 @@ export async function restoreBackup(
     ...(vaultId ? { vaultId } : {}),
   }));
   const folderMap = new Map(parsed.manifest.folders.map((f, i) => [f.id, folders[i].id]));
+  for (const folder of folders)
+    if (folder.parentId) folder.parentId = folderMap.get(folder.parentId) || null;
   const assetMap = new Map([...parsed.assets.keys()].map((id) => [id, crypto.randomUUID()]));
   const documents = parsed.manifest.documents.map((d) => ({
     ...d,

@@ -6,8 +6,18 @@ import { DocumentView } from "./ui/DocumentView";
 import { ContextPanel } from "./ui/ContextPanel";
 import { CommandPalette } from "./ui/CommandPalette";
 import { Settings } from "./ui/Settings";
-import { FolderDialog, MoveDialog, RevisionDialog } from "./ui/WorkspaceDialogs";
-import { SlateMark, IconButton, Menu, Modal, KindIcon } from "./ui/shared";
+import { FolderDialog, MoveDialog, RevisionDialog, RenameDialog } from "./ui/WorkspaceDialogs";
+import {
+  SlateMark,
+  IconButton,
+  Menu,
+  Modal,
+  KindIcon,
+  ContextActions,
+  type MenuAction,
+} from "./ui/shared";
+import { folderName } from "./core/folders";
+import type { SlateDocument, Folder as SlateFolder } from "./core/model";
 import {
   PanelLeftOpen,
   Plus,
@@ -33,9 +43,70 @@ import {
   ArrowLeft,
   FolderOpen,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 export default function SlateApp() {
   const app = useSlateApp();
+  const documentActions = (doc: SlateDocument): MenuAction[] =>
+    doc.trashedAt
+      ? [
+          {
+            label: "Restore document",
+            icon: <RefreshCw size={16} />,
+            onClick: () => app.restoreDoc(doc),
+          },
+        ]
+      : [
+          {
+            label: "Open",
+            icon: <KindIcon kind={doc.kind} size={16} />,
+            onClick: () => app.open(doc),
+          },
+          {
+            label: "Rename file",
+            icon: <Pencil size={16} />,
+            onClick: () => app.setRenameDoc(doc),
+          },
+          {
+            label: doc.starred ? "Remove from Starred" : "Add to Starred",
+            icon: <Star size={16} />,
+            onClick: () => app.star(doc),
+          },
+          {
+            label: "Move to folder",
+            icon: <Folder size={16} />,
+            onClick: () => app.setMoveDoc(doc),
+          },
+          {
+            label: "Version history",
+            icon: <History size={16} />,
+            onClick: () => app.setHistoryDoc(doc),
+          },
+          {
+            label: "Move to Trash",
+            icon: <Trash2 size={16} />,
+            onClick: () => app.trash(doc),
+            danger: true,
+            separator: true,
+          },
+        ];
+  const folderActions = (folder: SlateFolder): MenuAction[] => [
+    {
+      label: "Open folder",
+      icon: <FolderOpen size={16} />,
+      onClick: () => app.goLibrary("folder:" + folder.id),
+    },
+    {
+      label: "Rename folder",
+      icon: <Pencil size={16} />,
+      onClick: () => app.setFolderDialog({ folder }),
+    },
+    {
+      label: "New subfolder",
+      icon: <Plus size={16} />,
+      onClick: () => app.setFolderDialog({ parentId: folder.id }),
+    },
+  ];
   const navigation = (
     <Navigation
       view={app.view}
@@ -51,21 +122,32 @@ export default function SlateApp() {
       onTheme={app.theme}
       onNewFolder={() => app.setFolderDialog({})}
       onRenameFolder={(folder) => app.setFolderDialog({ folder })}
+      onRenameDocument={app.setRenameDoc}
+      documentActions={documentActions}
+      folderActions={folderActions}
       onClose={() => app.setSidebar(false)}
     />
   );
   const doc = app.selected;
   const docFolder = app.folders.find((f) => f.id === doc?.folderId);
   const title = app.view.startsWith("folder:")
-    ? app.folders.find((f) => f.id === app.view.slice(7))?.name
-    : (
-        {
-          library: "Library",
-          recent: "Recent",
-          starred: "Starred",
-          trash: "Trash",
-        } as Record<string, string>
-      )[app.view];
+    ? folderName(
+        app.folders.find((f) => f.id === app.view.slice(7)) || {
+          id: "",
+          name: "Library",
+          color: "",
+        },
+      )
+    : app.view.startsWith("tag:")
+      ? "#" + app.view.slice(4)
+      : (
+          {
+            library: "Library",
+            recent: "Recent",
+            starred: "Starred",
+            trash: "Trash",
+          } as Record<string, string>
+        )[app.view];
   return (
     <div
       className={"slate-app " + (app.sidebar && !app.compact ? "with-sidebar" : "without-sidebar")}
@@ -232,22 +314,35 @@ export default function SlateApp() {
               const item = app.documents.find((d) => d.id === id && !d.trashedAt);
               if (!item) return null;
               return (
-                <div className={"document-tab " + (app.active === id ? "active" : "")} key={id}>
-                  <button
-                    title={item.title}
-                    aria-current={app.active === id ? "page" : undefined}
-                    onClick={() => app.open(item)}
-                    onAuxClick={(e) => {
-                      if (e.button === 1) app.closeTab(id);
-                    }}
-                  >
-                    <KindIcon kind={item.kind} size={15} />
-                    <span>{item.title}</span>
-                  </button>
-                  <IconButton label={"Close " + item.title} onClick={() => app.closeTab(id)}>
-                    <X size={13} />
-                  </IconButton>
-                </div>
+                <ContextActions
+                  key={id}
+                  items={[
+                    ...documentActions(item),
+                    {
+                      label: "Close tab",
+                      icon: <X size={16} />,
+                      onClick: () => app.closeTab(id),
+                      separator: true,
+                    },
+                  ]}
+                >
+                  <div className={"document-tab " + (app.active === id ? "active" : "")} key={id}>
+                    <button
+                      title={item.title}
+                      aria-current={app.active === id ? "page" : undefined}
+                      onClick={() => app.open(item)}
+                      onAuxClick={(e) => {
+                        if (e.button === 1) app.closeTab(id);
+                      }}
+                    >
+                      <KindIcon kind={item.kind} size={15} />
+                      <span>{item.title}</span>
+                    </button>
+                    <IconButton label={"Close " + item.title} onClick={() => app.closeTab(id)}>
+                      <X size={13} />
+                    </IconButton>
+                  </div>
+                </ContextActions>
               );
             })}
           </nav>
@@ -295,10 +390,13 @@ export default function SlateApp() {
                   view={app.view}
                   onOpen={app.open}
                   onFolder={(id) => app.goLibrary("folder:" + id)}
-                  onNewFolder={() => app.setFolderDialog({})}
-                  onStar={app.star}
-                  onTrash={app.trash}
-                  onMove={app.setMoveDoc}
+                  onNewFolder={(parentId) => app.setFolderDialog({ parentId })}
+                  onLibrary={() => app.goLibrary("library")}
+                  onCreate={(notebook) => void app.create(notebook ? "notebook" : "note")}
+                  onRenameDocument={app.setRenameDoc}
+                  onRenameFolder={(folder) => app.setFolderDialog({ folder })}
+                  documentActions={documentActions}
+                  folderActions={folderActions}
                   onRestore={app.restoreDoc}
                   onSearch={() => app.setSearch(true)}
                 />
@@ -344,6 +442,11 @@ export default function SlateApp() {
                         </IconButton>
                       }
                       items={[
+                        {
+                          label: "Rename file",
+                          icon: <Pencil size={16} />,
+                          onClick: () => app.setRenameDoc(doc),
+                        },
                         {
                           label:
                             doc.kind === "note"
@@ -405,6 +508,7 @@ export default function SlateApp() {
                             active={id === app.active}
                             editorRef={app.getEditor(id)}
                             onLink={(name) => void app.openLink(name)}
+                            onTag={(name) => app.goLibrary("tag:" + name)}
                             onToast={app.notify}
                             onImage={() => app.imageInput.current?.click()}
                           />
@@ -514,6 +618,11 @@ export default function SlateApp() {
         onSaved={(id) => app.goLibrary("folder:" + id)}
       />
       <MoveDialog doc={app.moveDoc} folders={app.folders} onClose={() => app.setMoveDoc(null)} />
+      <RenameDialog
+        doc={app.renameDoc}
+        onClose={() => app.setRenameDoc(null)}
+        onSaved={() => app.notify("File renamed")}
+      />
       <RevisionDialog
         doc={app.historyDoc}
         onClose={() => app.setHistoryDoc(null)}

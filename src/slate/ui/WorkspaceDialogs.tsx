@@ -5,44 +5,50 @@ import { getRevisions } from "../core/storage";
 import { workspace } from "../core/workspace";
 import { Modal } from "./shared";
 import { renderMarkdown } from "../markdown/render";
+import { folderName } from "../core/folders";
 export function FolderDialog({
   value,
   onClose,
   onSaved,
 }: {
-  value: { folder?: SlateFolder } | null;
+  value: { folder?: SlateFolder; parentId?: string | null } | null;
   onClose(): void;
   onSaved(id: string): void;
 }) {
   const [name, setName] = useState(""),
+    [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
     if (value) {
-      setName(value.folder?.name || "");
+      setName(value.folder ? folderName(value.folder) : "");
       setError("");
     }
   }, [value]);
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setError("");
     try {
       if (value?.folder) {
         await workspace.renameFolder(value.folder.id, name);
         onClose();
       } else {
-        const folder = await workspace.addFolder(name);
+        const folder = await workspace.addFolder(name, value?.parentId || null);
         onClose();
         onSaved(folder.id);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the folder.");
+    } finally {
+      setBusy(false);
     }
   }
   return (
     <Modal
       open={!!value}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && !busy) onClose();
       }}
       title={value?.folder ? "Rename folder" : "A place for related ideas"}
       description="Keep notes, notebooks and readings together."
@@ -59,6 +65,7 @@ export function FolderDialog({
             placeholder="For example, Physics II"
             maxLength={100}
             required
+            disabled={busy}
           />
         </label>
         {error && (
@@ -67,11 +74,91 @@ export function FolderDialog({
           </p>
         )}
         <div className="modal-actions">
-          <button type="button" className="secondary-button" onClick={onClose}>
+          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="primary-button" disabled={!name.trim()}>
-            {value?.folder ? "Save name" : "Create folder"}
+          <button type="submit" className="primary-button" disabled={!name.trim() || busy}>
+            {busy ? "Saving…" : value?.folder ? "Save name" : "Create folder"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+export function RenameDialog({
+  doc,
+  onClose,
+  onSaved,
+}: {
+  doc: SlateDocument | null;
+  onClose(): void;
+  onSaved(): void;
+}) {
+  const [name, setName] = useState(""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (doc) {
+      setName(doc.title);
+      setError("");
+    }
+  }, [doc]);
+  return (
+    <Modal
+      open={!!doc}
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+      title="Rename file"
+      description={
+        doc?.source
+          ? "The " +
+            (doc.source.path.match(/\.[^./]+$/)?.[0] || "") +
+            " extension is kept. Contents and history stay intact."
+          : "Give this document a new name."
+      }
+      className="small-modal"
+    >
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!doc || busy) return;
+          setBusy(true);
+          setError("");
+          try {
+            await workspace.renameDocument(doc.id, name);
+            onClose();
+            onSaved();
+          } catch (error) {
+            setError(error instanceof Error ? error.message : "Could not rename this file.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <label className="input-label">
+          File name
+          <input
+            className="text-input"
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={200}
+            required
+            disabled={busy}
+          />
+        </label>
+        {error && (
+          <p className="inline-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="modal-actions">
+          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" className="primary-button" disabled={busy || !name.trim()}>
+            {busy ? "Renaming…" : "Save name"}
           </button>
         </div>
       </form>

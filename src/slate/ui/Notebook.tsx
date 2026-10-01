@@ -28,7 +28,7 @@ import {
 import { newPage, duplicatePage, type Page, type Paper, type SlateDocument } from "../core/model";
 import { workspace, useWorkspace } from "../core/workspace";
 import { InkSurface, type InkHandle, type InkTool } from "../ink/InkSurface";
-import { Floating, IconButton, Menu } from "./shared";
+import { Floating, IconButton, Menu, ContextActions } from "./shared";
 import { PaperPicker, PaperThumbnail, PdfPage } from "./Paper";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { getAsset } from "../core/storage";
@@ -288,40 +288,65 @@ export function Notebook({
               )}
             </div>
             {doc.pages.map((p, i) => (
-              <button
+              <ContextActions
                 key={p.id}
-                className={"page-thumb " + (i === index ? "active" : "")}
-                aria-label={"Go to page " + (i + 1)}
-                aria-current={i === index ? "page" : undefined}
-                onClick={() => changeIndex(i)}
-                draggable={doc.kind !== "pdf"}
-                onDragStart={(e) => e.dataTransfer.setData("text/slate-page", String(i))}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const raw = e.dataTransfer.getData("text/slate-page");
-                  if (!raw) return;
-                  const from = Number(raw);
-                  if (!Number.isInteger(from)) return;
-                  const pages = [...doc.pages];
-                  const [moved] = pages.splice(from, 1);
-                  if (!moved) return;
-                  pages.splice(i, 0, moved);
-                  workspace.update(doc.id, { pages });
-                  setIndex(i);
-                }}
+                items={[
+                  {
+                    label: "Open page",
+                    icon: <ChevronRight size={16} />,
+                    onClick: () => changeIndex(i),
+                  },
+                  ...(doc.kind !== "pdf"
+                    ? [
+                        {
+                          label: "Duplicate page",
+                          icon: <Copy size={16} />,
+                          onClick: () => {
+                            const pages = [...doc.pages];
+                            pages.splice(i + 1, 0, duplicatePage(p));
+                            workspace.update(doc.id, { pages });
+                            setIndex(i + 1);
+                          },
+                        },
+                      ]
+                    : []),
+                ]}
               >
-                {doc.kind === "pdf" ? (
-                  <div className="pdf-thumb">
-                    <span>PDF</span>
-                    <strong>{i + 1}</strong>
-                    <span>{p.strokes.length ? "Annotated" : "Page"}</span>
-                  </div>
-                ) : (
-                  <PaperThumbnail page={p} />
-                )}
-                <span>{i + 1}</span>
-              </button>
+                <button
+                  key={p.id}
+                  className={"page-thumb " + (i === index ? "active" : "")}
+                  aria-label={"Go to page " + (i + 1)}
+                  aria-current={i === index ? "page" : undefined}
+                  onClick={() => changeIndex(i)}
+                  draggable={doc.kind !== "pdf"}
+                  onDragStart={(e) => e.dataTransfer.setData("text/slate-page", String(i))}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const raw = e.dataTransfer.getData("text/slate-page");
+                    if (!raw) return;
+                    const from = Number(raw);
+                    if (!Number.isInteger(from)) return;
+                    const pages = [...doc.pages];
+                    const [moved] = pages.splice(from, 1);
+                    if (!moved) return;
+                    pages.splice(i, 0, moved);
+                    workspace.update(doc.id, { pages });
+                    setIndex(i);
+                  }}
+                >
+                  {doc.kind === "pdf" ? (
+                    <div className="pdf-thumb">
+                      <span>PDF</span>
+                      <strong>{i + 1}</strong>
+                      <span>{p.strokes.length ? "Annotated" : "Page"}</span>
+                    </div>
+                  ) : (
+                    <PaperThumbnail page={p} />
+                  )}
+                  <span>{i + 1}</span>
+                </button>
+              </ContextActions>
             ))}
             {doc.kind !== "pdf" && (
               <button className="add-page-thumb" onClick={add}>
@@ -341,33 +366,88 @@ export function Notebook({
             <div className="page-loading" aria-label="Opening PDF" />
           ) : (
             page && (
-              <div
-                className="paper-page"
-                style={{
-                  width: fit * zoom,
-                  height: (fit * zoom * page.height) / page.width,
-                  backgroundColor: doc.kind === "pdf" ? "#fff" : page.paper.color,
-                }}
+              <ContextActions
+                touch={false}
+                items={[
+                  {
+                    label: "Undo ink",
+                    icon: <Undo2 size={16} />,
+                    onClick: () => ink.current?.undo(),
+                    disabled: !history.undo,
+                  },
+                  {
+                    label: "Redo ink",
+                    icon: <Redo2 size={16} />,
+                    onClick: () => ink.current?.redo(),
+                    disabled: !history.redo,
+                  },
+                  {
+                    label: "Select ink",
+                    icon: <MousePointer2 size={16} />,
+                    onClick: () => setTool("select"),
+                    separator: true,
+                  },
+                  { label: "Pan page", icon: <Hand size={16} />, onClick: () => setTool("hand") },
+                  ...(history.selection
+                    ? [
+                        {
+                          label: "Rotate selection left",
+                          icon: <RotateCcw size={16} />,
+                          onClick: () => ink.current?.transformSelection(1, -Math.PI / 12),
+                        },
+                        {
+                          label: "Rotate selection right",
+                          icon: <RotateCw size={16} />,
+                          onClick: () => ink.current?.transformSelection(1, Math.PI / 12),
+                        },
+                        {
+                          label: "Make selection smaller",
+                          icon: <Shrink size={16} />,
+                          onClick: () => ink.current?.transformSelection(0.9, 0),
+                        },
+                        {
+                          label: "Make selection larger",
+                          icon: <Expand size={16} />,
+                          onClick: () => ink.current?.transformSelection(1.1, 0),
+                        },
+                        {
+                          label: "Delete selected ink",
+                          icon: <Trash2 size={16} />,
+                          onClick: () => ink.current?.removeSelection(),
+                          danger: true,
+                        },
+                      ]
+                    : []),
+                ]}
               >
-                {doc.kind === "pdf" && pdf && (
-                  <PdfPage pdf={pdf} number={index + 1} onText={setPdfText} />
-                )}
-                <InkSurface
-                  ref={ink}
-                  page={page}
-                  tool={tool}
-                  color={color}
-                  width={width}
-                  touchInk={preferences.touchInk}
-                  transparent={doc.kind === "pdf"}
-                  onChange={(strokes) => updatePage({ strokes })}
-                  onHistory={(undo, redo, selection) => setHistory({ undo, redo, selection })}
-                  onPinch={(factor) => setZoom((z) => Math.max(0.5, Math.min(3, z * factor)))}
-                />
-                {doc.example && index === 0 && doc.kind !== "pdf" && (
-                  <span className="example-page-label">Editable example</span>
-                )}
-              </div>
+                <div
+                  className="paper-page"
+                  style={{
+                    width: fit * zoom,
+                    height: (fit * zoom * page.height) / page.width,
+                    backgroundColor: doc.kind === "pdf" ? "#fff" : page.paper.color,
+                  }}
+                >
+                  {doc.kind === "pdf" && pdf && (
+                    <PdfPage pdf={pdf} number={index + 1} onText={setPdfText} />
+                  )}
+                  <InkSurface
+                    ref={ink}
+                    page={page}
+                    tool={tool}
+                    color={color}
+                    width={width}
+                    touchInk={preferences.touchInk}
+                    transparent={doc.kind === "pdf"}
+                    onChange={(strokes) => updatePage({ strokes })}
+                    onHistory={(undo, redo, selection) => setHistory({ undo, redo, selection })}
+                    onPinch={(factor) => setZoom((z) => Math.max(0.5, Math.min(3, z * factor)))}
+                  />
+                  {doc.example && index === 0 && doc.kind !== "pdf" && (
+                    <span className="example-page-label">Editable example</span>
+                  )}
+                </div>
+              </ContextActions>
             )
           )}
           {pdfText && doc.kind === "pdf" && (

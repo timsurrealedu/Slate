@@ -197,6 +197,8 @@ The completed, code-led layout centers physical pages and compact floating tools
 
 **Keep context within reach** — The first viewport pairs a rail and slim bar with a title, recent previews, and folder and document rows. The top bar owns note creation. Context yields before the rail; phone destinations move into a drawer and bottom navigation. Reading-column width, margins, and placement are saved user preferences shared by all Markdown modes; physical-page dimensions are source coordinates that scale to the viewport.
 
+Folders expand inside the rail. The library browses one directory at a time, with breadcrumbs and menus keeping organization in place. Markdown properties use compact tag chips; recent previews put readable body content near the top.
+
 ## Elevation & Depth
 
 **Lift transient tools** — Keep panels and previews quietly bordered. Use restrained shadows for floating menus and the compact ink toolbar.

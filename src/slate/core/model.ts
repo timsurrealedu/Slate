@@ -55,6 +55,7 @@ export interface Folder {
   color: string;
   vaultId?: string;
   path?: string;
+  parentId?: string | null;
 }
 export interface Preferences {
   theme: Theme;
@@ -64,6 +65,7 @@ export interface Preferences {
   workspaceName: string;
   lineNumbers: boolean;
   vim: boolean;
+  showHiddenFiles: boolean;
   editorWidth: number;
   editorMarginLeft: number;
   editorMarginRight: number;
@@ -83,6 +85,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   workspaceName: "My workspace",
   lineNumbers: false,
   vim: false,
+  showHiddenFiles: false,
   editorWidth: 850,
   editorMarginLeft: 50,
   editorMarginRight: 50,

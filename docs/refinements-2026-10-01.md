@@ -13,7 +13,7 @@ The maintained source is `.`. Root `AGENTS.md` and `PROJECT.md` record this dire
 7. **Library:** the top-right **+ New note** is the remaining library creation entry.
 8. **Layout:** **Note layout** sets column width, left/right margins, and left/center/right placement. Settings persist across notes, reloads, and all three Markdown modes.
 
-Slate caches connected-vault documents for offline reopening. It checks external file content before writes and preserves edits on failure; a conflict can be saved as a new local copy. Folder refresh preserves tags, starred state, Trash, and restored/imported documents. Portable backup restore makes additional copies and does not reconnect or overwrite original external files. Imported PDFs/DOCX/Flexcil and their original assets remain in Slate's local cache for the selected vault; connecting a folder does not synchronize those caches between devices. Library title/folder metadata does not rename existing external files.
+Slate caches connected-vault documents for offline reopening. It checks external file content before writes and preserves edits on failure; a conflict can be saved as a new local copy. Folder refresh preserves tags, starred state, Trash, and restored/imported documents. Portable backup restore makes additional copies and does not reconnect or overwrite original external files. Imported PDFs/DOCX/Flexcil and their original assets remain in Slate's local cache for the selected vault; connecting a folder does not synchronize those caches between devices. The subsequent [folder and tag update](library-and-tags-2026-10-02.md) adds physical vault Rename actions; inline title edits and folder moves remain local metadata.
 
 ## Validation and packages
 

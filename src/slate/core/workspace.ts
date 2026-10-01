@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import {
   DEFAULT_PREFERENCES,
   makeDocument,
@@ -11,6 +11,7 @@ import {
 import * as storage from "./storage";
 import { seedWorkspace } from "./seed";
 import { vault, VaultConflict, type VaultConnection } from "../platform/vault";
+import { visibleWorkspace, folderName, parentFolder, itemName } from "./folders";
 
 export interface WorkspaceState {
   ready: boolean;
@@ -58,6 +59,14 @@ export function useWorkspace() {
     () => state,
     () => state,
   );
+}
+export function useVisibleWorkspace() {
+  const data = useWorkspace();
+  const visible = useMemo(
+    () => visibleWorkspace(data.documents, data.folders, data.preferences.showHiddenFiles),
+    [data.documents, data.folders, data.preferences.showHiddenFiles],
+  );
+  return { ...data, ...visible };
 }
 export const workspace = {
   get: () => state,
@@ -147,27 +156,94 @@ export const workspace = {
     channel?.postMessage({ type: "saved", id: doc.id });
     return doc;
   },
-  async addFolder(name: string) {
+  async addFolder(value: string, parentId: string | null = null) {
+    const name = itemName(value),
+      parent = state.folders.find((folder) => folder.id === parentId);
+    if (parentId && !parent) throw new Error("The parent folder is unavailable.");
+    if (
+      state.folders.some(
+        (folder) =>
+          (parentFolder(folder, state.folders)?.id || null) === parentId &&
+          folderName(folder).toLocaleLowerCase() === name.toLocaleLowerCase(),
+      )
+    )
+      throw new Error("A folder with that name already exists here.");
+    const path = (parent?.path ? parent.path + "/" : "") + name;
     const folder = {
       id: newId(),
-      name: name.trim() || "Untitled folder",
+      name,
+      parentId,
       color: ["#7693ad", "#8d9e87", "#b39d86", "#9295ae"][state.folders.length % 4],
-      ...(state.vault
-        ? { vaultId: state.vault.id, path: name.trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, "_") }
-        : {}),
+      ...(state.vault ? { vaultId: state.vault.id, path } : {}),
     };
+    if (state.vault) await vault.mkdir(path);
     await storage.saveFolder(folder);
     publish({ folders: [...state.folders, folder] });
     return folder;
   },
-  async renameFolder(id: string, name: string) {
+  async renameFolder(id: string, value: string) {
+    await workspace.flush();
+    const name = itemName(value);
     const f = state.folders.find((x) => x.id === id);
     if (!f) return;
-    const folder = { ...f, name: name.trim() || f.name };
-    await storage.saveFolder(folder);
-    publish({ folders: state.folders.map((x) => (x.id === id ? folder : x)) });
+    if (name === folderName(f)) return;
+    const parentId = parentFolder(f, state.folders)?.id || null;
+    if (
+      state.folders.some(
+        (folder) =>
+          folder.id !== id &&
+          (parentFolder(folder, state.folders)?.id || null) === parentId &&
+          folderName(folder).toLocaleLowerCase() === name.toLocaleLowerCase(),
+      )
+    )
+      throw new Error("A folder with that name already exists here.");
+    const oldPath = f.path,
+      nextPath = oldPath?.split("/").slice(0, -1).concat(name).join("/");
+    if (oldPath && nextPath) await vault.rename(oldPath, nextPath, true);
+    const remap = (path: string) =>
+      oldPath && nextPath && (path === oldPath || path.startsWith(oldPath + "/"))
+        ? nextPath + path.slice(oldPath.length)
+        : path;
+    const folders = state.folders.map((folder) => ({
+      ...folder,
+      ...(folder.id === id ? { name, parentId } : {}),
+      ...(folder.path ? { path: remap(folder.path) } : {}),
+    }));
+    const documents = state.documents.map((doc) =>
+      doc.source ? { ...doc, source: { ...doc.source, path: remap(doc.source.path) } } : doc,
+    );
+    await storage.commitImport(documents, [], folders);
+    await vault.remapOriginals(oldPath, nextPath);
+    publish({ folders, documents });
+  },
+  async renameDocument(id: string, value: string) {
+    await workspace.flush();
+    const current = state.documents.find((doc) => doc.id === id);
+    if (!current) throw new Error("This document is unavailable.");
+    const title = itemName(value);
+    if (current.source) {
+      const oldPath = current.source.path,
+        extension = oldPath.match(/\.[^./]+$/)?.[0] || ".md";
+      const nextPath = oldPath
+        .split("/")
+        .slice(0, -1)
+        .concat(title + extension)
+        .join("/");
+      if (oldPath !== nextPath) {
+        await vault.rename(oldPath, nextPath, false, current.id);
+        const doc = { ...current, title, source: { ...current.source, path: nextPath } };
+        await storage.cacheVaultDocument(doc);
+        await vault.remapOriginals(oldPath, nextPath);
+        publish({ documents: state.documents.map((item) => (item.id === id ? doc : item)) });
+      }
+    }
+    workspace.update(id, { title });
+    await workspace.flush();
   },
   async preferences(patch: Partial<Preferences>) {
+    if (patch.showHiddenFiles === true && !state.preferences.showHiddenFiles && state.vault) {
+      await workspace.openVault(state.vault, true);
+    }
     const prefs = { ...state.preferences, ...patch };
     pendingPreferences = prefs;
     publish({ preferences: prefs, saving: countSaves() });
@@ -226,7 +302,15 @@ export const workspace = {
   },
   async backup() {
     await workspace.flush().catch(() => {});
-    return storage.exportWorkspace(state.documents, state.folders, state.preferences);
+    return storage.exportWorkspace(
+      state.documents,
+      state.folders.map((folder) => ({
+        ...folder,
+        name: folderName(folder),
+        parentId: parentFolder(folder, state.folders)?.id || null,
+      })),
+      state.preferences,
+    );
   },
   async restore(file: Blob) {
     const parsed = await storage.parseBackup(file);
@@ -238,14 +322,18 @@ export const workspace = {
     });
     return result.documents.length;
   },
-  async openVault(connection: VaultConnection | null) {
+  async openVault(
+    connection: VaultConnection | null,
+    showHidden = state.preferences.showHiddenFiles,
+  ) {
     await workspace.flush();
-    const indexed = connection ? await vault.index(connection) : null;
+    const indexed = connection ? await vault.index(connection, showHidden) : null;
     if (indexed) {
       const saved = await storage.readWorkspace();
       indexed.folders = indexed.folders.map((folder) => ({
-        ...folder,
         ...saved.folders.find((item) => item.id === folder.id),
+        ...folder,
+        color: saved.folders.find((item) => item.id === folder.id)?.color || folder.color,
       }));
       for (const folder of indexed.folders) await storage.saveFolder(folder);
       for (const doc of indexed.documents) {
@@ -267,7 +355,16 @@ export const workspace = {
     await workspace.load();
     if (indexed)
       publish({
-        documents: [...indexed.documents, ...state.documents.filter((doc) => !doc.source)],
+        documents: [
+          ...indexed.documents,
+          ...state.documents.filter(
+            (doc) =>
+              !doc.source ||
+              (!showHidden &&
+                doc.source &&
+                doc.source.path.split("/").some((part) => part.startsWith("."))),
+          ),
+        ],
         folders: [
           ...indexed.folders,
           ...state.folders.filter(

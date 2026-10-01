@@ -1,6 +1,7 @@
 import { useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
+import * as Context from "@radix-ui/react-context-menu";
 import * as Popover from "@radix-ui/react-popover";
 import { X, FileText, NotebookPen, File, FileType } from "lucide-react";
 import type { DocumentKind } from "../core/model";
@@ -201,6 +202,62 @@ export function Floating({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+export function ContextActions({
+  children,
+  items,
+  touch = true,
+}: {
+  children: ReactNode;
+  items: MenuAction[];
+  touch?: boolean;
+}) {
+  const trigger = useRef<HTMLSpanElement>(null);
+  return (
+    <Context.Root>
+      <Context.Trigger
+        asChild
+        ref={trigger}
+        onContextMenu={(event) => event.stopPropagation()}
+        onPointerDown={(event) => {
+          if (!touch && event.pointerType !== "mouse") event.preventDefault();
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const bounds = trigger.current?.getBoundingClientRect();
+          trigger.current?.dispatchEvent(
+            new MouseEvent("contextmenu", {
+              bubbles: true,
+              cancelable: true,
+              clientX: (bounds?.left || 0) + 20,
+              clientY: (bounds?.top || 0) + 20,
+            }),
+          );
+        }}
+      >
+        {children}
+      </Context.Trigger>
+      <Context.Portal>
+        <Context.Content className="dropdown-menu" aria-label="Context actions">
+          {items.map((item, index) => (
+            <span key={index}>
+              {item.separator && <Context.Separator className="menu-separator" />}
+              <Context.Item
+                className={"menu-item " + (item.danger ? "danger" : "")}
+                disabled={item.disabled}
+                onSelect={item.onClick}
+              >
+                {item.icon}
+                {item.label}
+              </Context.Item>
+            </span>
+          ))}
+        </Context.Content>
+      </Context.Portal>
+    </Context.Root>
   );
 }
 export function relativeDate(time: number) {

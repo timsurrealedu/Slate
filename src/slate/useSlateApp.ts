@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, createRef } from "react";
-import { workspace, useWorkspace } from "./core/workspace";
+import { workspace, useVisibleWorkspace } from "./core/workspace";
+import { parentFolder } from "./core/folders";
 import { headings, newId, type SlateDocument, type DocumentKind, type Folder } from "./core/model";
 import { importFile, exportDocument, loadPdf } from "./documents/files";
 import { putAsset } from "./core/storage";
@@ -12,7 +13,7 @@ interface InstallEvent extends Event {
   userChoice: Promise<{ outcome: string }>;
 }
 export function useSlateApp() {
-  const data = useWorkspace();
+  const data = useVisibleWorkspace();
   const nativeBack = useRef<() => boolean>(() => false);
   const [active, setActive] = useState<string | null>(null),
     [tabs, setTabs] = useState<string[]>([]),
@@ -28,7 +29,11 @@ export function useSlateApp() {
       undo?: () => void;
       error?: boolean;
     } | null>(null),
-    [folderDialog, setFolderDialog] = useState<{ folder?: Folder } | null>(null),
+    [folderDialog, setFolderDialog] = useState<{
+      folder?: Folder;
+      parentId?: string | null;
+    } | null>(null),
+    [renameDoc, setRenameDoc] = useState<SlateDocument | null>(null),
     [moveDoc, setMoveDoc] = useState<SlateDocument | null>(null),
     [historyDoc, setHistoryDoc] = useState<SlateDocument | null>(null),
     [busy, setBusy] = useState(""),
@@ -42,6 +47,13 @@ export function useSlateApp() {
     editorRefs = useRef(new Map<string, React.RefObject<MarkdownHandle | null>>()),
     toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const selected = data.documents.find((d) => d.id === active && !d.trashedAt) || null;
+  useEffect(() => {
+    if (!data.ready) return;
+    if (active && !data.documents.some((doc) => doc.id === active && !doc.trashedAt))
+      goLibrary("library");
+    if (view.startsWith("folder:") && !data.folders.some((folder) => folder.id === view.slice(7)))
+      goLibrary("library");
+  }, [data.ready, data.documents, data.folders, active, view]);
   nativeBack.current = () => {
     if (document.querySelector('[role="dialog"], [role="menu"]')) {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -56,7 +68,9 @@ export function useSlateApp() {
       return true;
     }
     if (view !== "library") {
-      goLibrary("library");
+      const folder = data.folders.find((item) => "folder:" + item.id === view);
+      const parent = folder && parentFolder(folder, data.folders);
+      goLibrary(parent ? "folder:" + parent.id : "library");
       return true;
     }
     return false;
@@ -432,6 +446,8 @@ export function useSlateApp() {
     setToast,
     folderDialog,
     setFolderDialog,
+    renameDoc,
+    setRenameDoc,
     moveDoc,
     setMoveDoc,
     historyDoc,

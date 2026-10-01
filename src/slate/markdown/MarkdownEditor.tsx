@@ -16,6 +16,7 @@ import { tags } from "@lezer/highlight";
 import { search, searchKeymap } from "@codemirror/search";
 import { livePreview } from "./live-preview";
 import { renderMarkdown, localImageReferences } from "./render";
+import { frontmatter } from "./metadata";
 import { getAsset } from "../core/storage";
 import { vimBindings } from "./vim";
 import type { Preferences } from "../core/model";
@@ -40,6 +41,8 @@ interface Props {
   sourcePath?: string;
   onChange(text: string): void;
   onLink(name: string): void;
+  onTag(name: string): void;
+  onProperties(): void;
 }
 export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
   function MarkdownEditor(props, ref) {
@@ -338,6 +341,15 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
             "--editor-end": props.preferences.editorAlignment === "right" ? "0" : "auto",
           } as React.CSSProperties
         }
+        onClick={(event) => {
+          const target = (event.target as HTMLElement).closest(
+            "[data-tag], [data-metadata-source]",
+          ) as HTMLElement | null;
+          if (!target) return;
+          event.preventDefault();
+          if (target.dataset.tag) props.onTag(target.dataset.tag);
+          else props.onProperties();
+        }}
       >
         <div
           ref={mount}
@@ -400,7 +412,9 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
             }}
           >
             <article className="prose reading-prose">
-              {!/^#\s/.test(props.content) && <h1>{props.title}</h1>}
+              {!/^#\s/.test((frontmatter(props.content)?.body ?? props.content).trimStart()) && (
+                <h1>{props.title}</h1>
+              )}
               <div
                 dangerouslySetInnerHTML={{
                   __html: renderMarkdown(props.content, assets, props.preferences.lineNumbers),

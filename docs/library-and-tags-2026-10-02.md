@@ -1,0 +1,19 @@
+# Folder navigation and Markdown tags
+
+The maintained application remains the Codex build. Kiro is legacy reference. Slate's colors, fonts, paper treatment, and offline workspace remain unchanged.
+
+- The sidebar starts with parent folders. Click a folder to expand it and open its library view; use the disclosure arrow to expand or collapse it independently. Nested folders and documents remain inside that branch.
+- The library displays the current folder's immediate subfolders and documents. Breadcrumbs return to a parent or Library. Recently opened previews can still surface documents from any visible folder.
+- Right-click documents, folders, open tabs, library space, notebook pages, or notebook ink for relevant actions. Menu buttons provide the same document/folder actions on touch devices. F2 renames a focused file or folder; Shift+F10 opens its context menu. Desktop text fields and editors have native editing menus.
+- **Rename file** and **Rename folder** update physical vault paths on desktop, Android's folder provider, and supported folder-access browsers. Names cannot overwrite an existing item. File extensions are retained; contents, cached identities, and history survive ordinary renames and vault refresh. Browser renames copy and verify every entry, including hidden files and binary assets, before removing originals individually. If interrupted or changed concurrently, originals or verified copies are retained; refresh the vault before retrying. Android providers must support renaming. Inline title edits and folder moves remain local metadata; renaming does not rewrite Markdown link targets.
+- Dot-prefixed files and folders, including all descendants of hidden folders, are hidden by default. **Settings → Appearance → Show hidden files** reveals them and persists across reloads. They stay out of search, tabs, and link completion when hidden; toggling visibility never deletes them.
+- YAML tags render as clickable chips in Live preview and Reading. Inline hashtags work too. Clicking opens a library view of matching visible notes, including notes in other folders. YAML flow lists, block lists, and comma/space-separated tag strings are supported. **Edit properties** opens Source at the metadata. Rendering does not rewrite the source.
+- Markdown thumbnails strip complete frontmatter before truncating the body. Compact tag chips and reduced padding leave more room for actual headings, paragraphs, and lists.
+
+## Validation
+
+31 unit tests passed, including real filesystem renames/collisions/external edits, stable identities, hidden descendants, additive hierarchy restore, YAML parsing, and browser copy/verify failure handling. 21 Chromium browser checks passed; one optional owner Flexcil fixture check was skipped. The browser checks cover hierarchy, breadcrumbs, rename/context keyboard flows, persisted hidden visibility and search exclusion, clickable tags in both modes, source preservation, source line offsets, preview content/spacing, Axe accessibility, phone/landscape overflow, and prior offline/Markdown/ink workflows.
+
+Both packaged Windows smoke tests passed with isolated profiles: native vault opening/write-through, file/folder renaming, stable identity and local images after relaunch, retained local workspace, close-time saves, offline reload, ink, backups, and save-failure protection. Android debug assembly passed and its bundled web shell matches the standalone build. Windows/Linux packages and the independent web build are generated from that same source. Linux runtime and physical Android provider/stylus behavior were not tested in this Windows session.
+
+Updated packages: `releases/2026-10-02`. Close the previous desktop app before starting the update; retain the existing Slate profile. The Android debug preview cannot replace the differently signed older release; see `platform/android/SIGNING.md` for signed updates.
