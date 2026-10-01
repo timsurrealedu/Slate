@@ -1,0 +1,26 @@
+{
+  "name": "slate-0.1.0-android.zip",
+  "sizeBytes": 8520223,
+  "sha256": "751c3807849c0c78aaafed46424887ca0f0ab499e921b41c3e082845068257c6",
+  "apkSizeBytes": 8519237,
+  "apkSha256": "da09f1b23783de8508188a157f32e6bf25e0b39b17dc7162a20180cc589dfec7",
+  "certificateSha256": "eeee066b62d4841232a9d5fa319b195ffd8dd54a03498b8330a775ca5fa638e8",
+  "package": "app.slate.workspace",
+  "version": "0.1.0",
+  "minimumApi": 24,
+  "targetApi": 36,
+  "signatureVerification": "pass",
+  "releaseBuild": true,
+  "archiveIntegrity": "pass",
+  "url": "https://d2ol7oe51mr4n9.cloudfront.net/user_3F27Q3VjiHRYnem5bzzoh3Mnmk0/976ff8fd-4223-4813-b778-a8db49d8aad0.zip",
+  "publicDownload": {
+    "http": 200,
+    "hashMatches": true,
+    "archiveIntegrity": "pass"
+  },
+  "sourceCommit": "c482900",
+  "installation": "pass: disposable API 36 emulator",
+  "debuggable": false,
+  "runtimeValidation": "blocked: emulator system WebView crashes before rendering",
+  "runtimeEvidence": "../../.impeccable/review/android-runtime.json"
+}

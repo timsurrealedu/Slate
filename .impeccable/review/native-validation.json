@@ -1,0 +1,61 @@
+{
+  "recordedAt": "2026-10-01T08:08:53.863542+00:00",
+  "applicationVersion": "0.1.0",
+  "linux": {
+    "executable": "Slate-linux-x64/Slate",
+    "environment": "Linux cloud sandbox; Xvfb; Chromium sandbox disabled in test invocation only",
+    "flows": {
+      "launch": "pass",
+      "immediateCloseSave": "pass",
+      "relaunch": "pass",
+      "ink": "pass",
+      "backupDownload": "pass",
+      "offlineReload": "pass",
+      "saveFailureKeepsOpen": "pass"
+    },
+    "runtimeErrors": [],
+    "capture": "linux-native.png",
+    "debianPackage": {
+      "architecture": "amd64",
+      "sizeBytes": 92430440,
+      "payloadInspection": "pass",
+      "sandboxHelper": "root/root; mode 4755"
+    },
+    "physicalDeviceValidation": "pending"
+  },
+  "windows": {
+    "packaging": "pass",
+    "architecture": "x64",
+    "launchValidation": "pending"
+  },
+  "android": {
+    "project": "configured",
+    "minimumApi": 24,
+    "targetApi": 36,
+    "compilation": "pass: debug and release",
+    "apkProduced": true,
+    "sdkLicenseAcceptedByAgent": true,
+    "sdkLicenseAcceptanceAuthorizedByUser": true,
+    "signatureVerification": "pass",
+    "certificateSha256": "eeee066b62d4841232a9d5fa319b195ffd8dd54a03498b8330a775ca5fa638e8",
+    "nativeSave": "ACTION_CREATE_DOCUMENT; bounded copy; cancellation does not report success",
+    "runtimeValidation": "blocked: emulator system WebView crashes before rendering",
+    "physicalDeviceValidation": "pending",
+    "installation": "pass: signed release installed in disposable API 36 emulator",
+    "webViewDebugging": false,
+    "runtimeEvidence": "android-runtime.json",
+    "nativeSaveRuntimeValidation": "pending: emulator cannot render WebView"
+  },
+  "independentStaticBuild": {
+    "browserWorkflowCount": 10,
+    "result": "pass"
+  },
+  "sharedCore": {
+    "integrityTestCount": 13,
+    "result": "pass"
+  },
+  "anonymousHostedSmoke": {
+    "result": "failed",
+    "reason": "provider sign-in gateway"
+  }
+}

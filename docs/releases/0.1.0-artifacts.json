@@ -1,0 +1,66 @@
+{
+  "version": "0.1.0",
+  "artifacts": [
+    {
+      "name": "slate-0.1.0-windows-x64.zip",
+      "sizeBytes": 162532169,
+      "sha256": "08e89cf3b8acfa8e13128b18a0282ca2fe504c5731d891b5bb38ba41a8c45f8f",
+      "archiveIntegrity": "pass",
+      "media_id": "154d5af8-6f40-4d00-a708-91e2bf1f43a0",
+      "url": "https://d2ol7oe51mr4n9.cloudfront.net/user_3F27Q3VjiHRYnem5bzzoh3Mnmk0/154d5af8-6f40-4d00-a708-91e2bf1f43a0.zip",
+      "publicDownload": {
+        "http": 200,
+        "hashMatches": true,
+        "archiveIntegrity": "pass"
+      }
+    },
+    {
+      "name": "slate-0.1.0-linux-amd64.zip",
+      "sizeBytes": 92431402,
+      "sha256": "cb0e687bdefead0ba80ad3d8f1373509e522c52aa9cadb80b2710a16e62c2245",
+      "archiveIntegrity": "pass",
+      "media_id": "258b66b8-41b0-4edc-b158-35a2442b30e7",
+      "url": "https://d2ol7oe51mr4n9.cloudfront.net/user_3F27Q3VjiHRYnem5bzzoh3Mnmk0/258b66b8-41b0-4edc-b158-35a2442b30e7.zip",
+      "publicDownload": {
+        "http": 200,
+        "hashMatches": true,
+        "archiveIntegrity": "pass"
+      }
+    },
+    {
+      "name": "slate-0.1.0-web.zip",
+      "sizeBytes": 5323245,
+      "sha256": "eb726c9e3bd7899bd964e24f93f8e3c269d062be7e6b564f5b3264128cc96ee9",
+      "archiveIntegrity": "pass",
+      "media_id": "c397f935-e88d-4f66-a3a8-8894f546b416",
+      "url": "https://d2ol7oe51mr4n9.cloudfront.net/user_3F27Q3VjiHRYnem5bzzoh3Mnmk0/c397f935-e88d-4f66-a3a8-8894f546b416.zip",
+      "publicDownload": {
+        "http": 200,
+        "hashMatches": true,
+        "archiveIntegrity": "pass"
+      }
+    }
+  ],
+  "androidApk": {
+    "name": "slate-0.1.0-android.zip",
+    "sizeBytes": 8520223,
+    "sha256": "751c3807849c0c78aaafed46424887ca0f0ab499e921b41c3e082845068257c6",
+    "apkSizeBytes": 8519237,
+    "apkSha256": "da09f1b23783de8508188a157f32e6bf25e0b39b17dc7162a20180cc589dfec7",
+    "certificateSha256": "eeee066b62d4841232a9d5fa319b195ffd8dd54a03498b8330a775ca5fa638e8",
+    "package": "app.slate.workspace",
+    "version": "0.1.0",
+    "minimumApi": 24,
+    "targetApi": 36,
+    "signatureVerification": "pass",
+    "releaseBuild": true,
+    "archiveIntegrity": "pass",
+    "url": "https://d2ol7oe51mr4n9.cloudfront.net/user_3F27Q3VjiHRYnem5bzzoh3Mnmk0/976ff8fd-4223-4813-b778-a8db49d8aad0.zip",
+    "publicDownload": {
+      "http": 200,
+      "hashMatches": true,
+      "archiveIntegrity": "pass"
+    },
+    "sourceCommit": "c482900"
+  }
+}

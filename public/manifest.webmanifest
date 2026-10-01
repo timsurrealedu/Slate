@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "Slate",
+  "short_name": "Slate",
+  "description": "Your notes, pages and ideas. Together on your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#385775",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/slate-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/slate-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/slate-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

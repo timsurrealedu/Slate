@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob:; object-src 'none'; base-uri 'none'"
+    />
+    <meta name="theme-color" content="#385775" />
+    <meta name="description" content="Your notes, pages and ideas, together on your device." />
+    <link rel="icon" type="image/svg+xml" href="/icons/slate.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Slate · A space for your ideas</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/standalone-entry.tsx"></script>
+  </body>
+</html>

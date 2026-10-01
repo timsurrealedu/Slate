@@ -1,0 +1,54 @@
+{
+  "recordedAt": "2026-10-01T08:08:53.863542+00:00",
+  "result": "blocked: emulator system WebView crashes before rendering",
+  "environment": {
+    "androidApi": 36,
+    "abi": "x86_64",
+    "emulatorVersion": "37.1.11",
+    "hardwareAccelerationAvailable": false,
+    "acceleration": "software TCG",
+    "gpu": "swiftshader",
+    "webViewPackage": "com.android.webview",
+    "webViewVersion": "133.0.6943.137",
+    "systemImage": "android-36;default;x86_64",
+    "systemFingerprint": "Android/sdk_phone64_x86_64/emu64x:16/BE2A.250530.026.D1/13818094:userdebug/test-keys"
+  },
+  "releaseApk": {
+    "sha256": "da09f1b23783de8508188a157f32e6bf25e0b39b17dc7162a20180cc589dfec7",
+    "installation": "pass: adb streamed install",
+    "versionCode": 1,
+    "versionName": "0.1.0",
+    "debuggable": false,
+    "activityStart": "accepted; crashed before Slate rendered",
+    "crashTimeUtc": "2026-10-01T08:06:49.362Z",
+    "signal": "SIGTRAP (signal 5, SI_KERNEL)",
+    "library": "libwebviewchromium.so",
+    "programCounter": "0x249c840",
+    "libraryBuildId": "3fed08901ee0e6620bf486e4e9e34fba0a577d62"
+  },
+  "debugApk": {
+    "installation": "pass",
+    "launch": "same system WebView SIGTRAP",
+    "programCounter": "0x249c840"
+  },
+  "controlProbe": {
+    "package": "test.slate.webview",
+    "slateCode": false,
+    "capacitorBridge": false,
+    "content": "one Android Activity, WebView, JavaScript enabled, loadDataWithBaseURL with static HTML",
+    "result": "same SIGTRAP in the same WebView library at 0x249c840",
+    "crashTimeUtc": "2026-10-01T08:03:04.286Z",
+    "graphicsWorkaround": "--disable-gpu --disable-features=Vulkan",
+    "workaroundResult": "still crashes in libwebviewchromium.so at 0x3dd7bf1",
+    "productionApkChangedForWorkaround": false
+  },
+  "conclusion": "The emulator cannot validate WebView application workflows. This is not evidence that Slate's Android workflows pass on a real device.",
+  "notValidated": [
+    "document editing and reopening",
+    "device Back and pause flushing",
+    "native Save destination copy and cancellation",
+    "offline relaunch",
+    "touch and stylus behavior",
+    "Android accessibility"
+  ]
+}

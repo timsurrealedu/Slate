@@ -1,0 +1,669 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T16:29:02.047905+00:00",
+  "title": "Design System: Slate",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Primary",
+        "canonical": "#385775",
+        "tonalRamp": [
+          "oklch(15% 0.06173 248.58)",
+          "oklch(25% 0.06173 248.58)",
+          "oklch(35% 0.06173 248.58)",
+          "oklch(45% 0.06173 248.58)",
+          "oklch(55% 0.06173 248.58)",
+          "oklch(70% 0.06173 248.58)",
+          "oklch(85% 0.06173 248.58)",
+          "oklch(95% 0.06173 248.58)"
+        ]
+      },
+      "primary-strong": {
+        "role": "primary",
+        "displayName": "Primary strong",
+        "canonical": "#2d4863",
+        "tonalRamp": [
+          "oklch(15% 0.05667 249.45)",
+          "oklch(25% 0.05667 249.45)",
+          "oklch(35% 0.05667 249.45)",
+          "oklch(45% 0.05667 249.45)",
+          "oklch(55% 0.05667 249.45)",
+          "oklch(70% 0.05667 249.45)",
+          "oklch(85% 0.05667 249.45)",
+          "oklch(95% 0.05667 249.45)"
+        ]
+      },
+      "primary-wash": {
+        "role": "primary",
+        "displayName": "Primary wash",
+        "canonical": "#eaf0f6",
+        "tonalRamp": [
+          "oklch(15% 0.01032 247.93)",
+          "oklch(25% 0.01032 247.93)",
+          "oklch(35% 0.01032 247.93)",
+          "oklch(45% 0.01032 247.93)",
+          "oklch(55% 0.01032 247.93)",
+          "oklch(70% 0.01032 247.93)",
+          "oklch(85% 0.01032 247.93)",
+          "oklch(95% 0.01032 247.93)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "canonical": "#f7f8fa",
+        "tonalRamp": [
+          "oklch(15% 0.00287 264.54)",
+          "oklch(25% 0.00287 264.54)",
+          "oklch(35% 0.00287 264.54)",
+          "oklch(45% 0.00287 264.54)",
+          "oklch(55% 0.00287 264.54)",
+          "oklch(70% 0.00287 264.54)",
+          "oklch(85% 0.00287 264.54)",
+          "oklch(95% 0.00287 264.54)"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "#eff0f3",
+        "tonalRamp": [
+          "oklch(15% 0.00415 271.37)",
+          "oklch(25% 0.00415 271.37)",
+          "oklch(35% 0.00415 271.37)",
+          "oklch(45% 0.00415 271.37)",
+          "oklch(55% 0.00415 271.37)",
+          "oklch(70% 0.00415 271.37)",
+          "oklch(85% 0.00415 271.37)",
+          "oklch(95% 0.00415 271.37)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(25% 0.00000 0.00)",
+          "oklch(35% 0.00000 0.00)",
+          "oklch(45% 0.00000 0.00)",
+          "oklch(55% 0.00000 0.00)",
+          "oklch(70% 0.00000 0.00)",
+          "oklch(85% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#f1f3f6",
+        "tonalRamp": [
+          "oklch(15% 0.00455 258.32)",
+          "oklch(25% 0.00455 258.32)",
+          "oklch(35% 0.00455 258.32)",
+          "oklch(45% 0.00455 258.32)",
+          "oklch(55% 0.00455 258.32)",
+          "oklch(70% 0.00455 258.32)",
+          "oklch(85% 0.00455 258.32)",
+          "oklch(95% 0.00455 258.32)"
+        ]
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "Hover",
+        "canonical": "#e7ebf0",
+        "tonalRamp": [
+          "oklch(15% 0.00800 253.85)",
+          "oklch(25% 0.00800 253.85)",
+          "oklch(35% 0.00800 253.85)",
+          "oklch(45% 0.00800 253.85)",
+          "oklch(55% 0.00800 253.85)",
+          "oklch(70% 0.00800 253.85)",
+          "oklch(85% 0.00800 253.85)",
+          "oklch(95% 0.00800 253.85)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Selection",
+        "canonical": "#e0e8f1",
+        "tonalRamp": [
+          "oklch(15% 0.01494 251.16)",
+          "oklch(25% 0.01494 251.16)",
+          "oklch(35% 0.01494 251.16)",
+          "oklch(45% 0.01494 251.16)",
+          "oklch(55% 0.01494 251.16)",
+          "oklch(70% 0.01494 251.16)",
+          "oklch(85% 0.01494 251.16)",
+          "oklch(95% 0.01494 251.16)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#253044",
+        "tonalRamp": [
+          "oklch(15% 0.03931 262.04)",
+          "oklch(25% 0.03931 262.04)",
+          "oklch(35% 0.03931 262.04)",
+          "oklch(45% 0.03931 262.04)",
+          "oklch(55% 0.03931 262.04)",
+          "oklch(70% 0.03931 262.04)",
+          "oklch(85% 0.03931 262.04)",
+          "oklch(95% 0.03931 262.04)"
+        ]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted ink",
+        "canonical": "#59657a",
+        "tonalRamp": [
+          "oklch(15% 0.03667 261.60)",
+          "oklch(25% 0.03667 261.60)",
+          "oklch(35% 0.03667 261.60)",
+          "oklch(45% 0.03667 261.60)",
+          "oklch(55% 0.03667 261.60)",
+          "oklch(70% 0.03667 261.60)",
+          "oklch(85% 0.03667 261.60)",
+          "oklch(95% 0.03667 261.60)"
+        ]
+      },
+      "faint-ink": {
+        "role": "neutral",
+        "displayName": "Faint ink",
+        "canonical": "#748096",
+        "tonalRamp": [
+          "oklch(15% 0.03652 262.58)",
+          "oklch(25% 0.03652 262.58)",
+          "oklch(35% 0.03652 262.58)",
+          "oklch(45% 0.03652 262.58)",
+          "oklch(55% 0.03652 262.58)",
+          "oklch(70% 0.03652 262.58)",
+          "oklch(85% 0.03652 262.58)",
+          "oklch(95% 0.03652 262.58)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Divider",
+        "canonical": "#e0e4ea",
+        "tonalRamp": [
+          "oklch(15% 0.00922 258.34)",
+          "oklch(25% 0.00922 258.34)",
+          "oklch(35% 0.00922 258.34)",
+          "oklch(45% 0.00922 258.34)",
+          "oklch(55% 0.00922 258.34)",
+          "oklch(70% 0.00922 258.34)",
+          "oklch(85% 0.00922 258.34)",
+          "oklch(95% 0.00922 258.34)"
+        ]
+      },
+      "success": {
+        "role": "success",
+        "displayName": "Success",
+        "canonical": "#607d6b",
+        "tonalRamp": [
+          "oklch(15% 0.04343 157.44)",
+          "oklch(25% 0.04343 157.44)",
+          "oklch(35% 0.04343 157.44)",
+          "oklch(45% 0.04343 157.44)",
+          "oklch(55% 0.04343 157.44)",
+          "oklch(70% 0.04343 157.44)",
+          "oklch(85% 0.04343 157.44)",
+          "oklch(95% 0.04343 157.44)"
+        ]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Danger",
+        "canonical": "#a4494e",
+        "tonalRamp": [
+          "oklch(15% 0.12057 18.84)",
+          "oklch(25% 0.12057 18.84)",
+          "oklch(35% 0.12057 18.84)",
+          "oklch(45% 0.12057 18.84)",
+          "oklch(55% 0.12057 18.84)",
+          "oklch(70% 0.12057 18.84)",
+          "oklch(85% 0.12057 18.84)",
+          "oklch(95% 0.12057 18.84)"
+        ]
+      },
+      "dark-primary": {
+        "role": "primary",
+        "displayName": "Dark primary",
+        "canonical": "#a6c4e2",
+        "tonalRamp": [
+          "oklch(15% 0.05356 248.49)",
+          "oklch(25% 0.05356 248.49)",
+          "oklch(35% 0.05356 248.49)",
+          "oklch(45% 0.05356 248.49)",
+          "oklch(55% 0.05356 248.49)",
+          "oklch(70% 0.05356 248.49)",
+          "oklch(85% 0.05356 248.49)",
+          "oklch(95% 0.05356 248.49)"
+        ]
+      },
+      "dark-primary-strong": {
+        "role": "primary",
+        "displayName": "Dark primary strong",
+        "canonical": "#bfd5eb",
+        "tonalRamp": [
+          "oklch(15% 0.03873 248.28)",
+          "oklch(25% 0.03873 248.28)",
+          "oklch(35% 0.03873 248.28)",
+          "oklch(45% 0.03873 248.28)",
+          "oklch(55% 0.03873 248.28)",
+          "oklch(70% 0.03873 248.28)",
+          "oklch(85% 0.03873 248.28)",
+          "oklch(95% 0.03873 248.28)"
+        ]
+      },
+      "dark-primary-wash": {
+        "role": "primary",
+        "displayName": "Dark primary wash",
+        "canonical": "#26384b",
+        "tonalRamp": [
+          "oklch(15% 0.04111 250.45)",
+          "oklch(25% 0.04111 250.45)",
+          "oklch(35% 0.04111 250.45)",
+          "oklch(45% 0.04111 250.45)",
+          "oklch(55% 0.04111 250.45)",
+          "oklch(70% 0.04111 250.45)",
+          "oklch(85% 0.04111 250.45)",
+          "oklch(95% 0.04111 250.45)"
+        ]
+      },
+      "dark-canvas": {
+        "role": "neutral",
+        "displayName": "Dark canvas",
+        "canonical": "#191e27",
+        "tonalRamp": [
+          "oklch(15% 0.01897 262.12)",
+          "oklch(25% 0.01897 262.12)",
+          "oklch(35% 0.01897 262.12)",
+          "oklch(45% 0.01897 262.12)",
+          "oklch(55% 0.01897 262.12)",
+          "oklch(70% 0.01897 262.12)",
+          "oklch(85% 0.01897 262.12)",
+          "oklch(95% 0.01897 262.12)"
+        ]
+      },
+      "dark-rail": {
+        "role": "neutral",
+        "displayName": "Dark rail",
+        "canonical": "#1e2530",
+        "tonalRamp": [
+          "oklch(15% 0.02306 259.34)",
+          "oklch(25% 0.02306 259.34)",
+          "oklch(35% 0.02306 259.34)",
+          "oklch(45% 0.02306 259.34)",
+          "oklch(55% 0.02306 259.34)",
+          "oklch(70% 0.02306 259.34)",
+          "oklch(85% 0.02306 259.34)",
+          "oklch(95% 0.02306 259.34)"
+        ]
+      },
+      "dark-panel": {
+        "role": "neutral",
+        "displayName": "Dark panel",
+        "canonical": "#242c38",
+        "tonalRamp": [
+          "oklch(15% 0.02474 258.35)",
+          "oklch(25% 0.02474 258.35)",
+          "oklch(35% 0.02474 258.35)",
+          "oklch(45% 0.02474 258.35)",
+          "oklch(55% 0.02474 258.35)",
+          "oklch(70% 0.02474 258.35)",
+          "oklch(85% 0.02474 258.35)",
+          "oklch(95% 0.02474 258.35)"
+        ]
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "Dark surface",
+        "canonical": "#2b3442",
+        "tonalRamp": [
+          "oklch(15% 0.02793 259.13)",
+          "oklch(25% 0.02793 259.13)",
+          "oklch(35% 0.02793 259.13)",
+          "oklch(45% 0.02793 259.13)",
+          "oklch(55% 0.02793 259.13)",
+          "oklch(70% 0.02793 259.13)",
+          "oklch(85% 0.02793 259.13)",
+          "oklch(95% 0.02793 259.13)"
+        ]
+      },
+      "dark-hover": {
+        "role": "neutral",
+        "displayName": "Dark hover",
+        "canonical": "#303d4f",
+        "tonalRamp": [
+          "oklch(15% 0.03586 256.60)",
+          "oklch(25% 0.03586 256.60)",
+          "oklch(35% 0.03586 256.60)",
+          "oklch(45% 0.03586 256.60)",
+          "oklch(55% 0.03586 256.60)",
+          "oklch(70% 0.03586 256.60)",
+          "oklch(85% 0.03586 256.60)",
+          "oklch(95% 0.03586 256.60)"
+        ]
+      },
+      "dark-selection": {
+        "role": "neutral",
+        "displayName": "Dark selection",
+        "canonical": "#34485f",
+        "tonalRamp": [
+          "oklch(15% 0.04663 252.43)",
+          "oklch(25% 0.04663 252.43)",
+          "oklch(35% 0.04663 252.43)",
+          "oklch(45% 0.04663 252.43)",
+          "oklch(55% 0.04663 252.43)",
+          "oklch(70% 0.04663 252.43)",
+          "oklch(85% 0.04663 252.43)",
+          "oklch(95% 0.04663 252.43)"
+        ]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Dark ink",
+        "canonical": "#e6eaf0",
+        "tonalRamp": [
+          "oklch(15% 0.00917 258.34)",
+          "oklch(25% 0.00917 258.34)",
+          "oklch(35% 0.00917 258.34)",
+          "oklch(45% 0.00917 258.34)",
+          "oklch(55% 0.00917 258.34)",
+          "oklch(70% 0.00917 258.34)",
+          "oklch(85% 0.00917 258.34)",
+          "oklch(95% 0.00917 258.34)"
+        ]
+      },
+      "dark-muted-ink": {
+        "role": "neutral",
+        "displayName": "Dark muted ink",
+        "canonical": "#a3adbd",
+        "tonalRamp": [
+          "oklch(15% 0.02566 259.82)",
+          "oklch(25% 0.02566 259.82)",
+          "oklch(35% 0.02566 259.82)",
+          "oklch(45% 0.02566 259.82)",
+          "oklch(55% 0.02566 259.82)",
+          "oklch(70% 0.02566 259.82)",
+          "oklch(85% 0.02566 259.82)",
+          "oklch(95% 0.02566 259.82)"
+        ]
+      },
+      "dark-divider": {
+        "role": "neutral",
+        "displayName": "Dark divider",
+        "canonical": "#34404f",
+        "tonalRamp": [
+          "oklch(15% 0.03043 254.20)",
+          "oklch(25% 0.03043 254.20)",
+          "oklch(35% 0.03043 254.20)",
+          "oklch(45% 0.03043 254.20)",
+          "oklch(55% 0.03043 254.20)",
+          "oklch(70% 0.03043 254.20)",
+          "oklch(85% 0.03043 254.20)",
+          "oklch(95% 0.03043 254.20)"
+        ]
+      },
+      "dark-success": {
+        "role": "success",
+        "displayName": "Dark success",
+        "canonical": "#aac4b0",
+        "tonalRamp": [
+          "oklch(15% 0.03971 152.30)",
+          "oklch(25% 0.03971 152.30)",
+          "oklch(35% 0.03971 152.30)",
+          "oklch(45% 0.03971 152.30)",
+          "oklch(55% 0.03971 152.30)",
+          "oklch(70% 0.03971 152.30)",
+          "oklch(85% 0.03971 152.30)",
+          "oklch(95% 0.03971 152.30)"
+        ]
+      },
+      "dark-danger": {
+        "role": "danger",
+        "displayName": "Dark danger",
+        "canonical": "#eda7ac",
+        "tonalRamp": [
+          "oklch(15% 0.08303 14.39)",
+          "oklch(25% 0.08303 14.39)",
+          "oklch(35% 0.08303 14.39)",
+          "oklch(45% 0.08303 14.39)",
+          "oklch(55% 0.08303 14.39)",
+          "oklch(70% 0.08303 14.39)",
+          "oklch(85% 0.08303 14.39)",
+          "oklch(95% 0.08303 14.39)"
+        ]
+      },
+      "dark-primary-ink": {
+        "role": "neutral",
+        "displayName": "Dark primary ink",
+        "canonical": "#192633",
+        "tonalRamp": [
+          "oklch(15% 0.03042 249.05)",
+          "oklch(25% 0.03042 249.05)",
+          "oklch(35% 0.03042 249.05)",
+          "oklch(45% 0.03042 249.05)",
+          "oklch(55% 0.03042 249.05)",
+          "oklch(70% 0.03042 249.05)",
+          "oklch(85% 0.03042 249.05)",
+          "oklch(95% 0.03042 249.05)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "ui": {
+        "displayName": "Ui",
+        "purpose": "Workspace interface text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Shared action labels."
+      },
+      "brand": {
+        "displayName": "Brand",
+        "purpose": "Slate wordmark."
+      },
+      "reading": {
+        "displayName": "Reading",
+        "purpose": "Document reading; preference 14\u201324px."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Actual Markdown source and code."
+      },
+      "h1": {
+        "displayName": "H1",
+        "purpose": "Prose heading hierarchy."
+      },
+      "h2": {
+        "displayName": "H2",
+        "purpose": "Prose heading hierarchy."
+      },
+      "h3": {
+        "displayName": "H3",
+        "purpose": "Prose heading hierarchy."
+      },
+      "navigation": {
+        "displayName": "Navigation",
+        "purpose": "Selected workspace navigation."
+      },
+      "mode": {
+        "displayName": "Mode",
+        "purpose": "Compact Markdown mode control."
+      }
+    },
+    "shadows": [
+      {
+        "name": "Floating light",
+        "value": "0 8px 32px #26334b18",
+        "purpose": "Transient light-theme surfaces."
+      },
+      {
+        "name": "Floating dark",
+        "value": "0 8px 32px #0005",
+        "purpose": "Transient dark-theme surfaces."
+      },
+      {
+        "name": "Ink toolbar",
+        "value": "0 5px 20px #172c461a",
+        "purpose": "Compact ink tools."
+      }
+    ],
+    "motion": [
+      {
+        "name": "Interface",
+        "value": "180ms cubic-bezier(.2,.8,.2,1)",
+        "purpose": "Short state transitions."
+      },
+      {
+        "name": "Reduced motion",
+        "value": "0.01ms",
+        "purpose": "Honor reduced-motion preferences."
+      },
+      {
+        "name": "Ink",
+        "value": "none",
+        "purpose": "No animation on the ink path."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "Context adapts",
+        "value": "1180px"
+      },
+      {
+        "name": "Temporary rail",
+        "value": "960px"
+      },
+      {
+        "name": "Phone destinations",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "primary-action",
+      "description": "Implemented shared primary action, including focus, press, disabled and touch states.",
+      "html": "<button class=\"ds-primary\" type=\"button\">New note</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:8px 12px;border:0;border-radius:6px;background:var(--accent,#385775);color:var(--panel,#fff);font:500 13px var(--ui-font,'DM Sans Variable',sans-serif);cursor:pointer;transition:background var(--motion,180ms cubic-bezier(.2,.8,.2,1)),color var(--motion,180ms cubic-bezier(.2,.8,.2,1))}.ds-primary:hover:enabled{background:var(--accent-strong,#2d4863);}.ds-primary:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-primary:disabled{opacity:.38;cursor:default}.ds-primary:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-primary{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-primary{transition-duration:.01ms}}:host-context([data-theme='dark']) .ds-primary{color:#192633}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "secondary-action",
+      "description": "Implemented shared secondary action, including focus, press, disabled and touch states.",
+      "html": "<button class=\"ds-secondary\" type=\"button\">New notebook</button>",
+      "css": ".ds-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:8px 12px;border:1px solid var(--line,#e0e4ea);border-radius:6px;background:var(--panel,#fff);color:var(--text,#253044);font:500 13px var(--ui-font,'DM Sans Variable',sans-serif);cursor:pointer;transition:background var(--motion,180ms cubic-bezier(.2,.8,.2,1)),color var(--motion,180ms cubic-bezier(.2,.8,.2,1))}.ds-secondary:hover:enabled{background:var(--surface,#f1f3f6);}.ds-secondary:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-secondary:disabled{opacity:.38;cursor:default}.ds-secondary:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-secondary{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-secondary{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Quiet action",
+      "kind": "button",
+      "refersTo": "quiet-action",
+      "description": "Implemented shared quiet action, including focus, press, disabled and touch states.",
+      "html": "<button class=\"ds-quiet\" type=\"button\">Cancel</button>",
+      "css": ".ds-quiet{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:8px 12px;border:0;border-radius:6px;background:transparent;color:var(--muted,#59657a);font:500 13px var(--ui-font,'DM Sans Variable',sans-serif);cursor:pointer;transition:background var(--motion,180ms cubic-bezier(.2,.8,.2,1)),color var(--motion,180ms cubic-bezier(.2,.8,.2,1))}.ds-quiet:hover:enabled{background:var(--hover,#e7ebf0);color:var(--text,#253044);}.ds-quiet:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-quiet:disabled{opacity:.38;cursor:default}.ds-quiet:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-quiet{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-quiet{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Representative titled field using the implemented shared input styling.",
+      "html": "<label class=\"ds-label\">Document title<input class=\"ds-field\" type=\"text\" placeholder=\"Untitled\" /></label>",
+      "css": ".ds-label{display:grid;gap:8px;color:var(--text,#253044);font:500 13px var(--ui-font,'DM Sans Variable',sans-serif)}.ds-field{width:100%;min-height:40px;padding:10px 12px;border:1px solid var(--line,#e0e4ea);border-radius:6px;background:var(--surface,#f1f3f6);color:var(--text,#253044);caret-color:var(--accent,#385775);font:14px var(--ui-font,'DM Sans Variable',sans-serif)}.ds-field::placeholder{color:var(--muted,#59657a)}.ds-field:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-field:disabled{opacity:.38;cursor:default}.ds-field:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-field{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-field{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Workspace navigation",
+      "kind": "nav",
+      "refersTo": "course-nav",
+      "description": "Selected destination from the actual workspace navigation.",
+      "html": "<nav aria-label=\"Workspace\"><button class=\"ds-nav\" type=\"button\" aria-current=\"page\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 7v14M3 18V3a2 2 0 0 1 2-2c3 0 5 1 7 3 2-2 4-3 7-3a2 2 0 0 1 2 2v15a1 1 0 0 1-1 1c-3 0-6 1-8 2-2-1-5-2-8-2a1 1 0 0 1-1-1Z\"/></svg><span>Library</span></button></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:11px;text-align:left;padding:10px 12px;width:100%;border:0;border-radius:6px;font:13px var(--ui-font,'DM Sans Variable',sans-serif);color:var(--muted,#59657a);background:transparent;min-height:39px;cursor:pointer;transition:background var(--motion,180ms cubic-bezier(.2,.8,.2,1)),color var(--motion,180ms cubic-bezier(.2,.8,.2,1))}.ds-nav:hover{background:var(--hover,#e7ebf0);color:var(--text,#253044)}.ds-nav[aria-current=page]{background:var(--selected,#e0e8f1);color:var(--accent,#385775);font-weight:550}.ds-nav:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-nav:disabled{opacity:.38;cursor:default}.ds-nav:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-nav{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-nav{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Markdown mode",
+      "kind": "chip",
+      "refersTo": "mode-chip",
+      "description": "Selected Reading control within the implemented compact mode group.",
+      "html": "<div class=\"ds-modes\" aria-label=\"Markdown mode\"><button class=\"ds-mode\" type=\"button\" aria-pressed=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 7v14M3 18V3a2 2 0 0 1 2-2c3 0 5 1 7 3 2-2 4-3 7-3a2 2 0 0 1 2 2v15a1 1 0 0 1-1 1c-3 0-6 1-8 2-2-1-5-2-8-2a1 1 0 0 1-1-1Z\"/></svg>Reading</button></div>",
+      "css": ".ds-modes{display:inline-flex;align-items:center;gap:2px;background:var(--surface,#f1f3f6);padding:3px;border-radius:6px}.ds-mode{display:flex;align-items:center;justify-content:center;gap:6px;min-height:29px;padding:6px 10px;border:0;border-radius:4px;white-space:nowrap;color:var(--muted,#59657a);background:transparent;font:10px var(--ui-font,'DM Sans Variable',sans-serif);cursor:pointer;transition:background var(--motion,180ms cubic-bezier(.2,.8,.2,1))}.ds-mode:hover{background:var(--hover,#e7ebf0)}.ds-mode[aria-pressed=true]{background:var(--panel,#fff);color:var(--accent,#385775);box-shadow:0 1px 3px #26334b0e;font-weight:550}.ds-mode:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-mode:disabled{opacity:.38;cursor:default}.ds-mode:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-mode{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-mode{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Document preview",
+      "kind": "card",
+      "refersTo": "document-preview",
+      "description": "Representative excerpt of the labeled editable Oscillations & waves example, using the actual library preview hierarchy.",
+      "html": "<button class=\"ds-document\" type=\"button\"><span class=\"ds-preview\"><span class=\"ds-paper\"><span class=\"ds-mini\"><strong>Oscillations &amp; waves</strong><p>A recurring idea in physics: a simple system can describe a surprisingly complex world.</p><blockquote>These are example notes. Make them your own, or move them to Trash.</blockquote></span></span></span><span class=\"ds-document-title\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z\"/><path d=\"M14 2v6h6M8 13h8M8 17h6\"/></svg><strong>Oscillations &amp; waves</strong></span><span class=\"ds-document-meta\">Physics II \u00b7 Today</span></button>",
+      "css": ".ds-document{display:block;width:100%;max-width:270px;padding:0;border:0;text-align:left;background:transparent;color:var(--text,#253044);font:14px var(--ui-font,'DM Sans Variable',sans-serif);cursor:pointer}.ds-preview{display:block;height:172px;background:var(--surface,#f1f3f6);border-radius:8px;overflow:hidden;transition:box-shadow var(--motion,180ms cubic-bezier(.2,.8,.2,1)),transform var(--motion,180ms cubic-bezier(.2,.8,.2,1))}.ds-document:hover .ds-preview{box-shadow:0 5px 16px #25354d18;transform:translateY(-2px)}.ds-paper{display:block;margin:14px 17px 0;padding:17px;min-height:230px;background:var(--panel,#fff);border-radius:2px;box-shadow:0 2px 9px #25354d0c}.ds-mini{font:7px/1.5 var(--reading-font,'Source Serif 4',Georgia,serif);color:var(--muted,#59657a)}.ds-mini>strong{display:block;font:600 13px/1.25 var(--ui-font,'DM Sans Variable',sans-serif);margin:0 0 9px;color:var(--text,#253044)}.ds-mini p{margin:0 0 7px;line-height:1.6}.ds-mini blockquote{margin:8px 0;padding:4px 7px;background:var(--surface,#f1f3f6)}.ds-document-title{display:flex;align-items:center;gap:7px;margin-top:13px;font-size:12px}.ds-document-title strong{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-document-title svg{color:var(--muted,#59657a);flex-shrink:0}.ds-document-meta{display:block;margin-top:6px;font-size:10px;color:var(--muted,#59657a);padding-left:22px}.ds-document:focus-visible{outline:2px solid var(--accent,#385775);outline-offset:3px}.ds-document:disabled{opacity:.38;cursor:default}.ds-document:active:enabled{transform:translateY(1px)}@media(pointer:coarse){.ds-document{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-document{transition-duration:.01ms}}@media(prefers-reduced-motion:reduce){.ds-preview{transition-duration:.01ms}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The open study desk",
+    "overview": "Slate opens a quiet course library into a generous page, with context in reach. Cool neutrals and slate-blue ink give the workspace a calm, local character.\n\nThe completed, code-led layout centers physical pages and compact floating tools. Paper grids are functional notebook templates.",
+    "keyCharacteristics": [
+      "Cool-neutral surfaces and slate-blue interaction ink.",
+      "Self-hosted DM Sans and Source Serif 4.",
+      "Pages with square corners, quiet separators and compact floating tools.",
+      "Adaptive context around a stable reading column."
+    ],
+    "rules": [
+      {
+        "name": "Ink marks action",
+        "body": "Use the primary family for actions, selected tools and focus. Success and danger communicate status.",
+        "section": "Colors"
+      },
+      {
+        "name": "Theme the workspace, preserve the paper",
+        "body": "Use neutral surfaces to separate canvas, rail, panels and controls. Page paper stays independent of the UI theme. Dark faint text shares dark-muted-ink; dark primary actions use dark-primary-ink.",
+        "section": "Colors"
+      },
+      {
+        "name": "Separate navigation from reading",
+        "body": "Use DM Sans for the interface and prose headings, Source Serif 4 for reading, and genuine monospace for source and code. Reading size responds to preference.",
+        "section": "Typography"
+      },
+      {
+        "name": "Keep context within reach",
+        "body": "\u2014 The first viewport pairs a rail and slim bar with a title, recent previews, and folder and document rows. The top bar owns note creation. Context yields before the rail; phone destinations move into a drawer and bottom navigation. Reading-column width, margins, and placement are saved user preferences shared by all Markdown modes; physical-page dimensions are source coordinates that scale to the viewport.",
+        "section": "Layout"
+      },
+      {
+        "name": "Lift transient tools",
+        "body": "Keep panels and previews quietly bordered. Use restrained shadows for floating menus and the compact ink toolbar.",
+        "section": "Elevation & Depth"
+      },
+      {
+        "name": "Square paper, rounded controls",
+        "body": "Keep physical pages square-cornered; use the observed control, preview, menu and ink-toolbar radii for their respective surfaces.",
+        "section": "Shapes"
+      },
+      {
+        "name": "Make states visible",
+        "body": "Use filled primary, bordered secondary and muted quiet actions. Action and field heights are minimums; coarse-pointer controls reach 44px square. Preserve focus and disabled states.",
+        "section": "Components"
+      },
+      {
+        "name": "Keep motion out of ink",
+        "body": "Use short interface easing, honor reduced motion, and keep ink sampling and rendering animation-free.",
+        "section": "Components"
+      }
+    ],
+    "dos": [
+      "Use real document content in previews.",
+      "Keep paper grids tied to functional templates.",
+      "Keep reading context within reach."
+    ],
+    "donts": [
+      "Apply the workspace theme to page paper.",
+      "Turn document-type metadata into a marketing kicker.",
+      "Animate ink sampling or rendering."
+    ]
+  }
+}
