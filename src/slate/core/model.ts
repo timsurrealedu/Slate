@@ -38,6 +38,7 @@ export interface SlateDocument {
   assetId?: string;
   source?: { vaultId: string; path: string };
   vaultId?: string;
+  vaultMissing?: boolean;
   flexcil?: { originalId: string; sourceEntry: string; fingerprint: string; limitations: string[] };
   mime?: string;
   createdAt: number;
@@ -54,8 +55,10 @@ export interface Folder {
   name: string;
   color: string;
   vaultId?: string;
+  vaultMissing?: boolean;
   path?: string;
   parentId?: string | null;
+  trashedAt?: number | null;
 }
 export interface Preferences {
   theme: Theme;
@@ -66,6 +69,7 @@ export interface Preferences {
   lineNumbers: boolean;
   vim: boolean;
   showHiddenFiles: boolean;
+  sidebarWidth: number;
   editorWidth: number;
   editorMarginLeft: number;
   editorMarginRight: number;
@@ -86,6 +90,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   lineNumbers: false,
   vim: false,
   showHiddenFiles: false,
+  sidebarWidth: 228,
   editorWidth: 850,
   editorMarginLeft: 50,
   editorMarginRight: 50,

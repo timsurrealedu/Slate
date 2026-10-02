@@ -286,6 +286,60 @@
   top: 50%;
   transform: translateY(-50%);
 }
+.library-folder-actions,
+.document-row .icon-button {
+  opacity: 0;
+}
+.library-folder:hover .library-folder-actions,
+.library-folder:focus-within .library-folder-actions,
+.document-row:hover .icon-button,
+.document-row:focus-within .icon-button,
+.library-folder-actions[data-state="open"],
+.document-row .icon-button[data-state="open"] {
+  opacity: 1;
+}
+.trashed-folder {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+}
+.touch-drag-label {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 60;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: 13px/1.5 var(--ui-font);
+}
+.trashed-folder span {
+  flex: 1;
+}
+.new-note-choices {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+.new-note-choices button {
+  flex: 1;
+  gap: 10px;
+  justify-content: center;
+}
+@media (hover: none), (pointer: coarse) {
+  .library-folder-actions,
+  .document-row .icon-button {
+    opacity: 1;
+  }
+}
+.slate-app[data-platform="android"] .library-folder-actions,
+.slate-app[data-platform="android"] .document-row .icon-button {
+  opacity: 1;
+}
 .folder-breadcrumbs,
 .folder-breadcrumbs > span {
   display: flex;

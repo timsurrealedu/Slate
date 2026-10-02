@@ -1,13 +1,20 @@
 import type { Folder, SlateDocument } from "./model";
 
 export const folderName = (folder: Folder) => (folder.path || folder.name).split("/").pop()!;
-export const hiddenPath = (path: string) => path.split("/").some((part) => part.startsWith("."));
+const pathParts = (path: string) => path.split(/[\\/]/);
+export const hiddenPath = (path: string) =>
+  pathParts(path).some((part) => part.startsWith(".") && part !== "." && part !== "..");
 
 export function parentFolder(folder: Folder, folders: Folder[]): Folder | undefined {
-  if (folder.parentId !== undefined) return folders.find((item) => item.id === folder.parentId);
-  const path = (folder.path || folder.name).split("/").slice(0, -1).join("/");
+  if (folder.parentId) return folders.find((item) => item.id === folder.parentId);
+  const path = pathParts(folder.path || folder.name)
+    .slice(0, -1)
+    .join("/");
   return path
-    ? folders.find((item) => (item.path || item.name) === path && item.vaultId === folder.vaultId)
+    ? folders.find(
+        (item) =>
+          pathParts(item.path || item.name).join("/") === path && item.vaultId === folder.vaultId,
+      )
     : undefined;
 }
 
@@ -24,7 +31,9 @@ export function folderTrail(folder: Folder | undefined, folders: Folder[]): Fold
 
 export function folderChildren(folders: Folder[], parentId: string | null = null) {
   return folders
-    .filter((folder) => (parentFolder(folder, folders)?.id || null) === parentId)
+    .filter(
+      (folder) => !folder.trashedAt && (parentFolder(folder, folders)?.id || null) === parentId,
+    )
     .sort((a, b) => folderName(a).localeCompare(folderName(b), undefined, { numeric: true }));
 }
 
@@ -37,7 +46,9 @@ export function visibleWorkspace(
   const hiddenFolders = new Set(
     folders
       .filter((folder) =>
-        folderTrail(folder, folders).some((item) => hiddenPath(item.path || item.name)),
+        folderTrail(folder, folders).some(
+          (item) => hiddenPath(item.name) || hiddenPath(item.path || ""),
+        ),
       )
       .map((folder) => folder.id),
   );
@@ -45,7 +56,8 @@ export function visibleWorkspace(
     folders: folders.filter((folder) => !hiddenFolders.has(folder.id)),
     documents: documents.filter(
       (doc) =>
-        !hiddenPath(doc.source?.path || doc.title) &&
+        !hiddenPath(doc.title) &&
+        !hiddenPath(doc.source?.path || "") &&
         (!doc.folderId || !hiddenFolders.has(doc.folderId)),
     ),
   };

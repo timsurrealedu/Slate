@@ -10,8 +10,16 @@ import {
 } from "./model";
 import * as storage from "./storage";
 import { seedWorkspace } from "./seed";
+import { renameHeading, titleHeading } from "../markdown/metadata";
 import { vault, VaultConflict, type VaultConnection } from "../platform/vault";
-import { visibleWorkspace, folderName, parentFolder, itemName } from "./folders";
+import {
+  visibleWorkspace,
+  folderName,
+  parentFolder,
+  folderTrail,
+  itemName,
+  hiddenPath,
+} from "./folders";
 
 export interface WorkspaceState {
   ready: boolean;
@@ -40,6 +48,39 @@ const writers = new Map<string, Promise<void>>();
 let channel: BroadcastChannel | undefined;
 let pendingPreferences: Preferences | null = null;
 let preferencesWriter: Promise<void> | undefined;
+let organization = Promise.resolve();
+let organizing = false;
+function organize(action: () => Promise<void>) {
+  const next = organization.then(async () => {
+    await workspace.flush();
+    organizing = true;
+    try {
+      await action();
+    } finally {
+      organizing = false;
+      for (const id of dirty.keys()) void write(id);
+    }
+    await workspace.flush();
+  });
+  organization = next.catch(() => {});
+  return next;
+}
+async function commitOrganization(documents: SlateDocument[], folders: Folder[]) {
+  await storage.commitImport(documents, [], folders);
+  const merged = documents.map((doc) => {
+    const pending = dirty.get(doc.id);
+    if (!pending) return doc;
+    const next = {
+      ...pending,
+      folderId: doc.folderId,
+      source: doc.source,
+      trashedAt: doc.trashedAt,
+    };
+    dirty.set(doc.id, next);
+    return next;
+  });
+  publish({ documents: merged, folders });
+}
 function publish(patch: Partial<WorkspaceState>) {
   state = { ...state, ...patch };
   listeners.forEach((fn) => fn());
@@ -80,10 +121,12 @@ export const workspace = {
       }
       const connection = await vault.resume();
       loaded.documents = loaded.documents.filter(
-        (doc) => (doc.source?.vaultId || doc.vaultId || null) === (connection?.id || null),
+        (doc) =>
+          !doc.vaultMissing &&
+          (doc.source?.vaultId || doc.vaultId || null) === (connection?.id || null),
       );
       loaded.folders = loaded.folders.filter(
-        (folder) => (folder.vaultId || null) === (connection?.id || null),
+        (folder) => !folder.vaultMissing && (folder.vaultId || null) === (connection?.id || null),
       );
       loaded.documents.forEach((d) => revisions.set(d.id, d.revision));
       publish({ ...loaded, vault: connection, ready: true, error: null });
@@ -129,10 +172,18 @@ export const workspace = {
       documents: state.documents.map((d) => (d.id === id ? doc : d)),
       saving: countSaves(),
     });
-    void write(id);
+    if (!organizing) void write(id);
   },
   async create(kind: DocumentKind, folderId: string | null = null) {
-    const title = kind === "notebook" ? "Untitled notebook" : "Untitled note";
+    const baseTitle = kind === "notebook" ? "Untitled notebook" : "Untitled note";
+    let title = baseTitle,
+      number = 2;
+    while (
+      state.documents.some(
+        (doc) => !doc.trashedAt && doc.folderId === folderId && doc.title === title,
+      )
+    )
+      title = baseTitle + " " + number++;
     let doc = makeDocument(kind, title, folderId, state.preferences.paper);
     if (state.vault && (kind === "note" || kind === "notebook"))
       doc = await vault.assign(doc, state.folders.find((f) => f.id === folderId)?.path);
@@ -216,29 +267,162 @@ export const workspace = {
     await vault.remapOriginals(oldPath, nextPath);
     publish({ folders, documents });
   },
-  async renameDocument(id: string, value: string) {
-    await workspace.flush();
-    const current = state.documents.find((doc) => doc.id === id);
-    if (!current) throw new Error("This document is unavailable.");
-    const title = itemName(value);
-    if (current.source) {
-      const oldPath = current.source.path,
-        extension = oldPath.match(/\.[^./]+$/)?.[0] || ".md";
-      const nextPath = oldPath
-        .split("/")
-        .slice(0, -1)
-        .concat(title + extension)
-        .join("/");
-      if (oldPath !== nextPath) {
+  renameDocument(id: string, value: string) {
+    return organize(async () => {
+      await workspace.flush();
+      const current = state.documents.find((doc) => doc.id === id);
+      if (!current) throw new Error("This document is unavailable.");
+      const title = itemName(value);
+      if (current.source) {
+        const oldPath = current.source.path,
+          extension = oldPath.match(/\.[^./]+$/)?.[0] || ".md";
+        const nextPath = oldPath
+          .split("/")
+          .slice(0, -1)
+          .concat(title + extension)
+          .join("/");
+        if (oldPath !== nextPath) {
+          await vault.rename(oldPath, nextPath, false, current.id);
+          let doc = {
+            ...(dirty.get(id) || state.documents.find((item) => item.id === id) || current),
+            title,
+            source: { ...current.source, path: nextPath },
+          };
+          await storage.cacheVaultDocument(doc);
+          await vault.remapOriginals(oldPath, nextPath);
+          doc = { ...(dirty.get(id) || doc), title, source: doc.source };
+          publish({ documents: state.documents.map((item) => (item.id === id ? doc : item)) });
+        }
+      }
+      const latest = dirty.get(id) || state.documents.find((doc) => doc.id === id) || current;
+      workspace.update(id, {
+        title,
+        ...(latest.kind === "note" &&
+        titleHeading(latest.content)?.title === titleHeading(current.content)?.title
+          ? { content: renameHeading(latest.content, title) }
+          : {}),
+      });
+      await workspace.flush();
+    });
+  },
+  moveDocument(id: string, folderId: string | null) {
+    return organize(async () => {
+      await workspace.flush();
+      const current = state.documents.find((doc) => doc.id === id);
+      const folder = state.folders.find((item) => item.id === folderId && !item.trashedAt);
+      if (!current || current.trashedAt || (folderId && !folder))
+        throw new Error("This item is unavailable.");
+      if (current.folderId === folderId) return;
+      if (
+        state.documents.some(
+          (doc) =>
+            doc.id !== id &&
+            !doc.trashedAt &&
+            doc.folderId === folderId &&
+            doc.title.toLocaleLowerCase() === current.title.toLocaleLowerCase(),
+        )
+      )
+        throw new Error("A document with that name already exists here.");
+      let doc = { ...current, folderId };
+      if (current.source) {
+        const oldPath = current.source.path;
+        const nextPath = (folder?.path ? folder.path + "/" : "") + oldPath.split("/").pop()!;
         await vault.rename(oldPath, nextPath, false, current.id);
-        const doc = { ...current, title, source: { ...current.source, path: nextPath } };
+        doc = {
+          ...(dirty.get(id) || state.documents.find((item) => item.id === id) || doc),
+          folderId,
+          source: { ...current.source, path: nextPath },
+        };
         await storage.cacheVaultDocument(doc);
         await vault.remapOriginals(oldPath, nextPath);
+        doc = { ...(dirty.get(id) || doc), folderId, source: doc.source };
         publish({ documents: state.documents.map((item) => (item.id === id ? doc : item)) });
       }
-    }
-    workspace.update(id, { title });
-    await workspace.flush();
+      workspace.update(id, { folderId });
+      await workspace.flush();
+    });
+  },
+  moveFolder(id: string, parentId: string | null) {
+    return organize(async () => {
+      await workspace.flush();
+      const current = state.folders.find((folder) => folder.id === id && !folder.trashedAt);
+      const parent = state.folders.find((folder) => folder.id === parentId && !folder.trashedAt);
+      if (!current || (parentId && !parent)) throw new Error("This folder is unavailable.");
+      if (parent && folderTrail(parent, state.folders).some((folder) => folder.id === id))
+        throw new Error("A folder cannot be moved inside itself or its descendants.");
+      if ((parentFolder(current, state.folders)?.id || null) === parentId) return;
+      const name = folderName(current);
+      if (
+        state.folders.some(
+          (folder) =>
+            folder.id !== id &&
+            !folder.trashedAt &&
+            (parentFolder(folder, state.folders)?.id || null) === parentId &&
+            folderName(folder).toLocaleLowerCase() === name.toLocaleLowerCase(),
+        )
+      )
+        throw new Error("A folder with that name already exists here.");
+      const oldPath = current.path;
+      const nextPath = oldPath ? (parent?.path ? parent.path + "/" : "") + name : undefined;
+      if (oldPath && nextPath) await vault.rename(oldPath, nextPath, true);
+      const remap = (path: string) =>
+        oldPath && nextPath && (path === oldPath || path.startsWith(oldPath + "/"))
+          ? nextPath + path.slice(oldPath.length)
+          : path;
+      const folders = state.folders.map((folder) => ({
+        ...folder,
+        ...(folder.id === id ? { parentId } : {}),
+        ...(folder.path ? { path: remap(folder.path) } : {}),
+      }));
+      const documents = state.documents.map((doc) =>
+        doc.source ? { ...doc, source: { ...doc.source, path: remap(doc.source.path) } } : doc,
+      );
+      await vault.remapOriginals(oldPath, nextPath);
+      await commitOrganization(documents, folders);
+    });
+  },
+  trashFolder(id: string) {
+    return organize(async () => {
+      await workspace.flush();
+      const ids = new Set(
+        state.folders
+          .filter((folder) => folderTrail(folder, state.folders).some((item) => item.id === id))
+          .map((folder) => folder.id),
+      );
+      const timestamp = Date.now();
+      const folders = state.folders.map((folder) =>
+        ids.has(folder.id) && !folder.trashedAt ? { ...folder, trashedAt: timestamp } : folder,
+      );
+      const documents = state.documents.map((doc) =>
+        doc.folderId && ids.has(doc.folderId) && !doc.trashedAt
+          ? { ...doc, trashedAt: timestamp }
+          : doc,
+      );
+      await commitOrganization(documents, folders);
+    });
+  },
+  restoreFolder(id: string) {
+    return organize(async () => {
+      await workspace.flush();
+      const timestamp = state.folders.find((folder) => folder.id === id)?.trashedAt;
+      if (!timestamp) return;
+      const ids = new Set(
+        state.folders
+          .filter((folder) => folderTrail(folder, state.folders).some((item) => item.id === id))
+          .map((folder) => folder.id),
+      );
+      const folders = state.folders.map((folder) =>
+        ids.has(folder.id) && folder.trashedAt === timestamp
+          ? { ...folder, trashedAt: null }
+          : folder,
+      );
+      const documents = state.documents.map((doc) =>
+        doc.folderId && ids.has(doc.folderId) && doc.trashedAt === timestamp
+          ? { ...doc, trashedAt: null }
+          : doc,
+      );
+      await commitOrganization(documents, folders);
+    });
   },
   async preferences(patch: Partial<Preferences>) {
     if (patch.showHiddenFiles === true && !state.preferences.showHiddenFiles && state.vault) {
@@ -333,6 +517,7 @@ export const workspace = {
       indexed.folders = indexed.folders.map((folder) => ({
         ...saved.folders.find((item) => item.id === folder.id),
         ...folder,
+        vaultMissing: false,
         color: saved.folders.find((item) => item.id === folder.id)?.color || folder.color,
       }));
       for (const folder of indexed.folders) await storage.saveFolder(folder);
@@ -350,6 +535,28 @@ export const workspace = {
         if (cached) await storage.checkpointDocument(doc.id);
         await storage.cacheVaultDocument(doc);
       }
+      // A successful scan is authoritative only for paths it actually includes.
+      // Keep missing items cached for recovery, but exclude them from the live vault.
+      await storage.commitImport(
+        saved.documents
+          .filter(
+            (doc) =>
+              doc.source?.vaultId === connection!.id &&
+              (showHidden || !hiddenPath(doc.source.path)) &&
+              !indexed.documents.some((item) => item.id === doc.id),
+          )
+          .map((doc) => ({ ...doc, vaultMissing: true })),
+        [],
+        saved.folders
+          .filter(
+            (folder) =>
+              folder.vaultId === connection!.id &&
+              folder.path &&
+              (showHidden || !hiddenPath(folder.path)) &&
+              !indexed.folders.some((item) => item.id === folder.id),
+          )
+          .map((folder) => ({ ...folder, vaultMissing: true })),
+      );
     }
     await vault.connect(connection);
     await workspace.load();
@@ -365,12 +572,7 @@ export const workspace = {
                 doc.source.path.split("/").some((part) => part.startsWith("."))),
           ),
         ],
-        folders: [
-          ...indexed.folders,
-          ...state.folders.filter(
-            (folder) => !indexed.folders.some((item) => item.id === folder.id),
-          ),
-        ],
+        folders: state.folders,
       });
   },
 };

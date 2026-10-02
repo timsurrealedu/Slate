@@ -1,12 +1,48 @@
-import { StateField, type EditorState, type Range } from "@codemirror/state";
+import { StateField, StateEffect, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, WidgetType, EditorView, type DecorationSet } from "@codemirror/view";
-import { mathHtml, renderMarkdown, metadataHtml, tagHtml } from "./render";
-import { frontmatter, inlineTag } from "./metadata";
+import { mathHtml, renderMarkdown, metadataHtml, tagHtml, markdownBlocks } from "./render";
+import { frontmatter, inlineTag, titleHeading } from "./metadata";
+import { titleEditor, disposeTitleEditor } from "./FileTitle";
+const focused = StateEffect.define<boolean>();
+export function fileTitle(
+  title: () => string,
+  rename: (value: string) => Promise<void>,
+  source = false,
+) {
+  class TitleWidget extends WidgetType {
+    constructor(readonly value: string) {
+      super();
+    }
+    eq(other: TitleWidget) {
+      return this.value === other.value;
+    }
+    toDOM() {
+      return titleEditor(this.value, rename);
+    }
+    destroy(element: HTMLElement) {
+      disposeTitleEditor(element);
+    }
+    ignoreEvent() {
+      return true;
+    }
+  }
+  return EditorView.decorations.compute(["doc"], (state) => {
+    const heading = titleHeading(state.doc.toString());
+    if (source && heading) return Decoration.none;
+    const widget = new TitleWidget(heading?.title || title());
+    return Decoration.set([
+      heading
+        ? Decoration.replace({ widget, block: true }).range(heading.from, heading.to)
+        : Decoration.widget({ widget, block: true, side: -1 }).range(0),
+    ]);
+  });
+}
 class PreviewWidget extends WidgetType {
   constructor(
     readonly html: string,
     readonly from: number,
     readonly kind: "block" | "inline" = "block",
+    readonly source = "",
   ) {
     super();
   }
@@ -17,15 +53,46 @@ class PreviewWidget extends WidgetType {
     const dom = document.createElement(this.kind === "block" ? "div" : "span");
     dom.className = this.kind === "block" ? "live-block prose" : "live-math";
     dom.innerHTML = this.html;
-    dom.addEventListener("mousedown", (e) => {
-      if ((e.target as HTMLElement).closest("a")) return;
+    const tasks = [...view.state.doc.sliceString(this.from).matchAll(/^\s*[-*+]\s+\[([ xX])\]/gm)];
+    dom.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input, index) => {
+      const task = tasks[index];
+      if (!task) return;
+      input.disabled = false;
+      input.setAttribute("aria-label", input.checked ? "Mark task incomplete" : "Complete task");
+      input.addEventListener("mousedown", (event) => event.preventDefault());
+      input.addEventListener("click", () => {
+        const at = this.from + task.index! + task[0].indexOf("[") + 1;
+        view.dispatch({ changes: { from: at, to: at + 1, insert: input.checked ? "x" : " " } });
+      });
+    });
+    dom.addEventListener("mousedown", (event) => {
+      const e = event as MouseEvent;
+      if ((e.target as HTMLElement).closest("a,button,input,summary")) return;
       if ((e.target as HTMLElement).closest("td,th")) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("slate-edit-table", { detail: this.from }));
         return;
       }
       e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from }, scrollIntoView: false });
+      let anchor = this.from;
+      const caret = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+      if (
+        caret &&
+        dom.contains(caret.startContainer) &&
+        caret.startContainer.nodeType === Node.TEXT_NODE
+      ) {
+        const text = caret.startContainer.textContent || "";
+        const at = this.source.indexOf(text);
+        if (text && at >= 0) anchor += at + caret.startOffset;
+      }
+      // Reveal source and place the caret in one transaction. Focusing first lets
+      // the native selection point at the old, replaced block at the document start.
+      view.dispatch({
+        selection: { anchor },
+        effects: [focused.of(true), view.scrollSnapshot()],
+        scrollIntoView: false,
+        userEvent: "select.pointer",
+      });
       view.focus();
     });
     return dom;
@@ -104,32 +171,79 @@ class Bullet extends WidgetType {
   }
 }
 export function livePreview(open: (name: string) => void, assets: () => Map<string, string>) {
+  const focus = StateField.define<boolean>({
+    create: () => document.activeElement?.getAttribute("aria-label") === "Markdown editor",
+    update(value, transaction) {
+      return transaction.effects.find((effect) => effect.is(focused))?.value ?? value;
+    },
+  });
   const field = StateField.define<DecorationSet>({
     create: build,
     update(value, transaction) {
-      return transaction.docChanged || transaction.selection ? build(transaction.state) : value;
+      return transaction.docChanged ||
+        transaction.selection ||
+        transaction.effects.some((effect) => effect.is(focused))
+        ? build(transaction.state)
+        : value;
     },
     provide: (field) => EditorView.decorations.from(field),
   });
   function build(state: EditorState): DecorationSet {
     const ranges: Range<Decoration>[] = [];
-    const metadata = frontmatter(state.doc.toString());
+    const source = state.doc.toString();
+    const metadata = frontmatter(source);
+    const heading = titleHeading(source);
     if (metadata)
       ranges.push(
         Decoration.replace({
           widget: new PreviewWidget(metadataHtml(metadata.raw), 0),
           block: true,
-        }).range(0, metadata.raw.trimEnd().length),
+        }).range(0, metadata.raw.endsWith("\n") ? metadata.raw.length - 1 : metadata.raw.length),
       );
     const first = state.doc.lineAt(state.selection.main.from).number,
       last = state.doc.lineAt(state.selection.main.to).number;
-    const active = (a: number, b = a) => a <= last && b >= first;
+    const active = (a: number, b = a) => state.field(focus) && a <= last && b >= first;
+    const bodyOffset = metadata?.raw.length || 0;
+    const blocks = markdownBlocks(state.doc.sliceString(bodyOffset));
+    const rendered = new Set<number>();
+    for (const block of blocks) {
+      const from = bodyOffset + block.from;
+      const rawEnd = Math.min(state.doc.length, bodyOffset + block.to);
+      const to = rawEnd;
+      if (from >= to) continue;
+      const startLine = state.doc.lineAt(from).number;
+      const endLine = state.doc.lineAt(Math.max(from, to - 1)).number;
+      if (heading && from === heading.from) {
+        for (let line = startLine; line <= endLine; line++) rendered.add(line);
+        continue;
+      }
+      if (block.type !== "table" && active(startLine, endLine)) continue;
+      if (block.type === "space") {
+        ranges.push(Decoration.replace({ block: true, inclusive: true }).range(from, to));
+        for (let line = startLine; line <= endLine; line++) rendered.add(line);
+        continue;
+      }
+      ranges.push(
+        Decoration.replace({
+          widget: new PreviewWidget(
+            renderMarkdown(block.source, assets(), false, block.links),
+            from,
+            "block",
+            block.source,
+          ),
+          block: true,
+          inclusive: true,
+        }).range(from, to),
+      );
+      for (let line = startLine; line <= endLine; line++) rendered.add(line);
+    }
     let inCode = false;
     for (let number = 1; number <= state.doc.lines; number++) {
       const line = state.doc.line(number),
         text = line.text,
         offset = line.from;
-      if (metadata && offset < metadata.raw.trimEnd().length) continue;
+      if (metadata && offset < metadata.raw.length) continue;
+      if (rendered.has(number)) continue;
       if (/^\s*(\x60{3,}|~{3,})/.test(text)) {
         inCode = !inCode;
         ranges.push(Decoration.line({ class: "cm-code-fence" }).range(offset));
@@ -140,8 +254,8 @@ export function livePreview(open: (name: string) => void, assets: () => Map<stri
         continue;
       }
       if (/^\s*\$\$/.test(text)) {
-        let end = number,
-          closing = text.indexOf("$$", text.indexOf("$$") + 2);
+        let end = number;
+        const closing = text.indexOf("$$", text.indexOf("$$") + 2);
         if (closing < 0) {
           for (let n = number + 1; n <= state.doc.lines; n++)
             if (/^\s*\$\$\s*$/.test(state.doc.line(n).text)) {
@@ -302,5 +416,25 @@ export function livePreview(open: (name: string) => void, assets: () => Map<stri
     }
     return Decoration.set(ranges, true);
   }
-  return field;
+  return [
+    focus,
+    field,
+    EditorView.domEventHandlers({
+      focus(_event, view) {
+        if (!view.state.field(focus))
+          view.dispatch({ effects: [focused.of(true), view.scrollSnapshot()] });
+      },
+      blur(_event, view) {
+        if (view.state.field(focus))
+          view.dispatch({ effects: [focused.of(false), view.scrollSnapshot()] });
+      },
+      click(event) {
+        const link = (event.target as HTMLElement).closest("a[data-note]") as HTMLElement | null;
+        if (link) {
+          event.preventDefault();
+          open(link.dataset.note!);
+        }
+      },
+    }),
+  ];
 }

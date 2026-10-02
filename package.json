@@ -21,7 +21,7 @@
     "build:standalone": "vite build --config vite.standalone.config.ts",
     "package:desktop": "node platform/desktop/package.cjs",
     "android:sync": "cap sync android",
-    "android:build": "cd android && ./gradlew assembleDebug",
+    "android:build": "node platform/android/build-apk.mjs",
     "package:linux": "node platform/desktop/package-linux.cjs",
     "test:desktop:linux": "bun tests/desktop/smoke.mjs",
     "android:release": "node platform/android/build-release.mjs"
@@ -148,5 +148,5 @@
   "trustedDependencies": [
     "electron"
   ],
-  "version": "0.1.0"
+  "version": "0.1.6"
 }

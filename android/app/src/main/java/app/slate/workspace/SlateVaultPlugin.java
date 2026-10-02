@@ -154,11 +154,22 @@ public class SlateVaultPlugin extends Plugin {
         try {
             String relative = call.getString("path"), nextPath = call.getString("nextPath"); String[] parts = path(relative), next = path(nextPath);
             String oldParent = relative.substring(0, relative.length() - parts[parts.length - 1].length()), newParent = nextPath.substring(0, nextPath.length() - next[next.length - 1].length());
-            if (!oldParent.equals(newParent)) throw new IllegalArgumentException("Rename within the same folder.");
-            Uri tree = tree(call.getString("id")), owner = parent(tree, relative), document = find(tree, relative, false); String name = next[next.length - 1];
-            for (Child child : children(tree, owner)) if (!child.name.equals(parts[parts.length - 1]) && child.name.equalsIgnoreCase(name)) throw new IllegalStateException("A file or folder with that name already exists here.");
             boolean directory = call.getBoolean("directory", false);
+            if (relative.equals(nextPath)) { call.resolve(); return; }
+            if (directory && nextPath.startsWith(relative + "/")) throw new IllegalArgumentException("A folder cannot be moved inside itself.");
+            Uri tree = tree(call.getString("id")), owner = parent(tree, relative), destination = parent(tree, nextPath), document = find(tree, relative, directory); String name = next[next.length - 1];
+            for (Child child : children(tree, destination)) if ((!oldParent.equals(newParent) || !child.name.equals(parts[parts.length - 1])) && child.name.equalsIgnoreCase(name)) throw new IllegalStateException("A file or folder with that name already exists here.");
             if (!directory && (call.getString("expected") == null || !Objects.equals(readText(document), call.getString("expected")))) throw new IllegalStateException("Vault conflict: the original file changed.");
+            if (!oldParent.equals(newParent)) {
+                if (!name.equals(parts[parts.length - 1])) throw new IllegalArgumentException("Move without changing the item name.");
+                Uri moved = DocumentsContract.moveDocument(getContext().getContentResolver(), document, owner, destination);
+                if (moved == null) throw new IllegalStateException("This folder provider does not support moving. The original was retained.");
+                if (!displayName(moved).equals(name)) {
+                    DocumentsContract.moveDocument(getContext().getContentResolver(), moved, destination, owner);
+                    throw new IllegalStateException("The provider changed the item name. Refresh the vault.");
+                }
+                call.resolve(); return;
+            }
             Uri renamed = DocumentsContract.renameDocument(getContext().getContentResolver(), document, name);
             if (renamed == null) throw new IllegalStateException("This folder provider does not support renaming.");
             if (!displayName(renamed).equals(name)) {

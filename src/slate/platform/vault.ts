@@ -199,8 +199,9 @@ export const vault = {
     if (!active) throw new Error("Open the vault before renaming files.");
     safeVaultPath(path);
     safeVaultPath(nextPath);
-    if (path.split("/").slice(0, -1).join("/") !== nextPath.split("/").slice(0, -1).join("/"))
-      throw new Error("Rename within the same folder.");
+    if (path === nextPath) return;
+    if (directory && nextPath.startsWith(path + "/"))
+      throw new Error("A folder cannot be moved inside itself.");
     const expected = docId ? await readMeta<string>("vault-original:" + docId) : undefined;
     if (!active.handle)
       return bridge()!.rename({ id: active.id, path, nextPath, directory, expected });
@@ -211,6 +212,7 @@ export const vault = {
       path.split("/").pop()!,
       nextPath.split("/").pop()!,
       directory,
+      await vault.directory(nextPath.split("/").slice(0, -1).join("/")),
     );
   },
   async remapOriginals(oldPath?: string, nextPath?: string) {
@@ -394,9 +396,9 @@ async function renameBrowserItem(
   name: string,
   nextName: string,
   directory: boolean,
+  targetParent: DirectoryHandle = parent,
 ) {
-  if (name === nextName) return;
-  for await (const entry of parent.values())
+  for await (const entry of targetParent.values())
     if (entry.name.toLocaleLowerCase() === nextName.toLocaleLowerCase())
       throw new Error(
         "A file or folder with that name already exists here. For a capitalization change, use an intermediate name.",
@@ -439,10 +441,10 @@ async function renameBrowserItem(
     }
   }
   await gather(parent, name, [], directory);
-  let destination: DirectoryHandle = parent;
+  let destination: DirectoryHandle = targetParent;
   try {
     if (directory)
-      destination = (await parent.getDirectoryHandle(nextName, {
+      destination = (await targetParent.getDirectoryHandle(nextName, {
         create: true,
       })) as DirectoryHandle;
     for (const folder of directories.slice(1)) {

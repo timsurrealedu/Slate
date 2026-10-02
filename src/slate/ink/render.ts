@@ -1,31 +1,42 @@
 import { getStroke } from "perfect-freehand";
 import type { Page, Stroke } from "../core/model";
+const paths = new WeakMap<Stroke, { count: number; width: number; d: string; path?: Path2D }>();
+export function strokePath(stroke: Stroke) {
+  if (!stroke.points.length) return "";
+  let cached = paths.get(stroke);
+  if (!cached || cached.count !== stroke.points.length || cached.width !== stroke.width) {
+    const outline = getStroke(
+      stroke.points.map((p) => [p.x, p.y, p.p]),
+      {
+        size: stroke.width * (stroke.tool === "highlighter" ? 1 : 2),
+        thinning: stroke.tool === "pen" ? 0.55 : 0,
+        smoothing: 0.65,
+        streamline: 0.35,
+        simulatePressure: false,
+        last: true,
+      },
+    );
+    if (!outline.length) return "";
+    let d = `M${outline[0][0]},${outline[0][1]}`;
+    for (let i = 0; i < outline.length; i++) {
+      const next = outline[(i + 1) % outline.length];
+      const p = outline[i];
+      d += `Q${p[0]},${p[1]} ${(p[0] + next[0]) / 2},${(p[1] + next[1]) / 2}`;
+    }
+    cached = { count: stroke.points.length, width: stroke.width, d: d + "Z" };
+    paths.set(stroke, cached);
+  }
+  return cached.d;
+}
 export function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
-  if (!stroke.points.length) return;
-  const outline = getStroke(
-    stroke.points.map((p) => [p.x, p.y, p.p]),
-    {
-      size: stroke.width * (stroke.tool === "highlighter" ? 1 : 2),
-      thinning: stroke.tool === "pen" ? 0.55 : 0,
-      smoothing: 0.65,
-      streamline: 0.35,
-      simulatePressure: false,
-      last: true,
-    },
-  );
-  if (!outline.length) return;
+  const d = strokePath(stroke);
+  if (!d) return;
+  const cached = paths.get(stroke)!;
+  cached.path ??= new Path2D(d);
   ctx.save();
   ctx.globalAlpha = stroke.tool === "highlighter" ? 0.3 : 1;
   ctx.fillStyle = stroke.color;
-  ctx.beginPath();
-  ctx.moveTo(outline[0][0], outline[0][1]);
-  for (let i = 0; i < outline.length; i++) {
-    const next = outline[(i + 1) % outline.length];
-    const p = outline[i];
-    ctx.quadraticCurveTo(p[0], p[1], (p[0] + next[0]) / 2, (p[1] + next[1]) / 2);
-  }
-  ctx.closePath();
-  ctx.fill();
+  ctx.fill(cached.path);
   ctx.restore();
 }
 export function drawPaper(ctx: CanvasRenderingContext2D, page: Page) {

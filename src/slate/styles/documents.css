@@ -28,6 +28,97 @@
 .document-titlebar > input:hover {
   background: var(--surface);
 }
+.document-titlebar > .file-title-mount {
+  min-width: 0;
+  max-width: 550px;
+  flex: 1;
+}
+.document-titlebar .file-title {
+  margin: 0;
+  padding-bottom: 0;
+}
+.document-titlebar .file-title input {
+  font-size: 13px;
+  font-weight: 550;
+  padding: 6px;
+}
+.file-title {
+  margin: 0;
+  padding-bottom: 25px;
+}
+.file-title :is(input, textarea) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  font: 600 1.8em/1.2 var(--ui-font);
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+}
+.markdown-surface .file-title h1 {
+  margin: 0;
+  font: inherit;
+}
+.file-title :is(input, textarea):hover {
+  background: var(--surface);
+}
+.file-title :is(input, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.file-title textarea {
+  resize: none;
+  overflow: hidden;
+  text-overflow: clip;
+}
+.markdown-surface .cm-tooltip {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  font: 14px/1.5 var(--ui-font);
+}
+.markdown-surface .cm-tooltip-autocomplete > ul {
+  padding: 4px;
+}
+.markdown-surface .cm-tooltip-autocomplete > ul > li {
+  padding: 7px 10px;
+  border-radius: 4px;
+  color: var(--text);
+}
+.markdown-surface .cm-tooltip-autocomplete > ul > li[aria-selected="true"] {
+  background: var(--selected);
+  color: var(--text);
+}
+.markdown-surface .cm-completionIcon {
+  color: var(--muted);
+  opacity: 1;
+}
+.markdown-surface .cm-completionMatchedText {
+  color: inherit;
+  font-weight: 650;
+  text-decoration: none;
+}
+.mode-live .live-block {
+  margin: 0;
+  overflow: visible;
+  display: flow-root;
+  white-space: normal;
+}
+.markdown-block {
+  display: flow-root;
+}
+.mode-live .live-block img {
+  max-height: 650px;
+}
+.mode-live .live-block table {
+  margin: 22px 0;
+}
 .document-title-actions {
   display: flex;
   align-items: center;
@@ -43,6 +134,35 @@
   min-height: 0;
   position: relative;
   background: var(--panel);
+}
+.prose-callout {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 12px 16px;
+  margin-block: 16px;
+}
+.prose-callout > summary,
+.callout-title {
+  display: list-item;
+  font-family: var(--ui-font);
+  font-size: 0.9em;
+  color: var(--accent);
+  font-weight: 550;
+}
+.callout-title {
+  display: block;
+}
+.prose-callout > summary {
+  cursor: pointer;
+  min-height: 32px;
+}
+.prose-callout > :last-child {
+  margin-bottom: 0;
+}
+.prose mark {
+  color: inherit;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
 }
 .document-panes {
   flex: 1;
@@ -101,6 +221,34 @@
   display: flex;
   align-items: center;
   gap: 1px;
+}
+.compact-format-trigger {
+  display: none;
+}
+.compact-format-menu {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(280px, calc(100vw - 64px));
+}
+.compact-format-menu .quiet-button {
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  font-size: 12px;
+}
+.compact-format-menu svg {
+  flex-shrink: 0;
+}
+.document-titlebar > .document-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
 }
 .format-tools .icon-button {
   height: 29px;
@@ -648,8 +796,34 @@
     box-shadow: -5px 0 25px #1b2a4318;
     width: 260px;
   }
-  .format-tools .icon-button:nth-last-child(-n + 2) {
+  .markdown-toolbar .format-tools {
     display: none;
+  }
+  .compact-format-trigger {
+    display: flex;
+  }
+  .line-number-trigger {
+    display: none;
+  }
+  .note-layout-controls .line-number-option {
+    display: flex;
+  }
+}
+@media (max-width: 960px) {
+  .document-titlebar {
+    min-height: 52px;
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .document-titlebar .document-title-icon,
+  .document-title-actions > .icon-button:not([aria-haspopup="menu"]) {
+    display: none;
+  }
+  .document-titlebar .icon-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 @media (max-width: 760px) {
@@ -658,9 +832,9 @@
     min-height: 46px;
   }
   .markdown-toolbar {
-    padding: 7px 13px;
-    gap: 10px;
-    flex-wrap: wrap;
+    padding: 4px 8px;
+    gap: 8px;
+    flex-wrap: nowrap;
   }
   .format-tools {
     margin-left: auto;
@@ -691,35 +865,31 @@
     height: 32px;
   }
   .markdown-toolbar {
-    padding: 8px 13px 5px;
-    gap: 5px;
+    min-height: 54px;
+    padding: 3px 8px;
+    gap: 8px;
   }
   .editor-modes {
-    flex: 1;
-    width: 100%;
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
   }
   .editor-modes > button {
-    flex: 1;
-    padding: 7px;
-    font-size: 10px;
-    min-height: 33px;
+    flex: 0 0 44px;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
   }
-  .format-tools {
-    justify-content: space-between;
-    width: 100%;
-    margin-left: 0;
+  .editor-modes > button > span {
+    display: none;
   }
-  .format-tools .icon-button {
-    min-width: 32px;
-    width: 32px;
-    min-height: 33px;
-    height: 33px;
+  .editor-modes > button > svg {
+    width: 18px;
+    height: 18px;
   }
-  .format-tools .icon-button:nth-last-child(-n + 2) {
-    display: flex;
-  }
-  .format-tools .toolbar-divider {
-    margin: 0 1px;
+  .editor-options .icon-button {
+    min-width: 44px;
+    min-height: 44px;
   }
   .cm-content,
   .reading-prose {
@@ -800,58 +970,240 @@
   padding-left: min(var(--editor-left, 50px), 20vw);
   padding-right: min(var(--editor-right, 50px), 20vw);
 }
+.markdown-surface .cm-content {
+  padding-top: 40px;
+  padding-bottom: 90px;
+}
+.markdown-surface .cm-line {
+  padding-left: 0;
+  padding-right: 0;
+}
+.markdown-surface .cm-scroller {
+  line-height: 1.8;
+}
+@media (max-width: 760px) {
+  .markdown-surface .cm-content {
+    padding-top: 28px;
+    padding-bottom: 75px;
+  }
+}
+@media (max-width: 600px) {
+  .markdown-surface .cm-content {
+    padding-top: 26px;
+  }
+}
 .markdown-surface .cm-editor .cm-gutters {
   padding-top: 0;
   background-color: var(--panel);
   color: var(--muted);
   border-color: var(--line);
 }
-.markdown-surface .cm-editor .cm-activeLineGutter { background: var(--surface); color: var(--text); }
-.reading-block { position: relative; }
+.markdown-surface .cm-editor .cm-activeLineGutter {
+  background: var(--surface);
+  color: var(--text);
+}
+.reading-block {
+  position: relative;
+}
 .reading-block::before {
   content: attr(data-line-number);
   position: absolute;
   right: calc(100% + 12px);
   top: 0;
   color: var(--muted);
-  font: 13px/1.8 ui-monospace, monospace;
+  font:
+    13px/1.8 ui-monospace,
+    monospace;
 }
-.with-line-numbers .reading-scroll { padding-left: 32px; }
-.editor-options { display: flex; gap: 3px; margin-left: auto; }
-.markdown-toolbar { gap: 8px; flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; }
-.format-tools { flex-wrap: wrap; }
-.note-layout-controls { width: min(290px, 80vw); padding: 10px; }
-.note-layout-controls h3 { margin: 0 0 18px; font-size: 14px; }
-.note-layout-controls label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
-.note-layout-controls input { width: 100%; order: 2; }
-.note-layout-controls output { margin-left: auto; color: var(--muted); }
-.note-layout-controls select { margin-left: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px; }
-.table-composer { width: min(760px, calc(100vw - 24px)); }
-.composer-dimensions { display: flex; gap: 24px; margin: 20px 0; }
-.composer-dimensions label { display: flex; align-items: center; gap: 10px; }
-.composer-dimensions input { width: 68px; }
-.table-composer-scroll { overflow: auto; max-height: 45vh; }
-.table-composer table { width: 100%; border-collapse: collapse; }
-.table-composer td { border: 1px solid var(--line); padding: 0; min-width: 100px; }
-.table-composer td input { width: 100%; min-width: 100px; padding: 12px; border: 0; background: var(--panel); }
-.table-composer tr:first-child input { background: var(--surface); font-weight: 550; }
-.composer-dimensions input { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
-.composer-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
-.equation-field { min-height: 80px; margin: 24px 0 18px; }
-.equation-field math-field { width: 100%; min-height: 72px; padding: 15px; font-size: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; --caret-color: var(--accent); --selection-background-color: var(--selected); --contains-highlight-background-color: var(--accent-wash); }
-.equation-templates { display: flex; flex-wrap: wrap; gap: 8px; }
-.composer-checkbox { display: flex; gap: 9px; align-items: center; margin: 24px 0 0; }
-.cm-editor .cm-vim-panel { background: var(--surface); color: var(--text); padding: 8px 18px; font: 13px ui-monospace, monospace; }
-.cm-editor .cm-fat-cursor { background: var(--accent-wash); outline-color: var(--accent); }
-.cm-editor:not(.cm-focused) .cm-fat-cursor { outline-color: var(--accent); }
-.cm-editor .cm-vim-panel input { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
-.settings-help { font-size: 13px; line-height: 1.7; color: var(--muted); }
-.reading-vim-command { padding: 8px 18px; background: var(--surface); color: var(--text); font: 13px ui-monospace, monospace; }
-.reading-vim-command label { display: flex; align-items: center; gap: 5px; }
-.reading-vim-command input { flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: 6px; }
+.with-line-numbers .reading-scroll {
+  padding-left: 32px;
+}
+.editor-options {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+.markdown-toolbar {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.format-tools {
+  flex-wrap: nowrap;
+}
+.line-number-option {
+  display: none;
+  width: 100%;
+}
+.line-number-option > span {
+  margin-left: auto;
+  color: var(--accent);
+}
+.note-layout-controls {
+  width: min(290px, 80vw);
+  padding: 10px;
+}
+.note-layout-controls h3 {
+  margin: 0 0 18px;
+  font-size: 14px;
+}
+.note-layout-controls label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.note-layout-controls input {
+  width: 100%;
+  order: 2;
+}
+.note-layout-controls output {
+  margin-left: auto;
+  color: var(--muted);
+}
+.note-layout-controls select {
+  margin-left: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px;
+}
+.table-composer {
+  width: min(760px, calc(100vw - 24px));
+}
+.composer-dimensions {
+  display: flex;
+  gap: 24px;
+  margin: 20px 0;
+}
+.composer-dimensions label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.composer-dimensions input {
+  width: 68px;
+}
+.table-composer-scroll {
+  overflow: auto;
+  max-height: 45vh;
+}
+.table-composer table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-composer td {
+  border: 1px solid var(--line);
+  padding: 0;
+  min-width: 100px;
+}
+.table-composer td input {
+  width: 100%;
+  min-width: 100px;
+  padding: 12px;
+  border: 0;
+  background: var(--panel);
+}
+.table-composer tr:first-child input {
+  background: var(--surface);
+  font-weight: 550;
+}
+.composer-dimensions input {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+.composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.equation-field {
+  min-height: 80px;
+  margin: 24px 0 18px;
+}
+.equation-field math-field {
+  width: 100%;
+  min-height: 72px;
+  padding: 15px;
+  font-size: 24px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  --caret-color: var(--accent);
+  --selection-background-color: var(--selected);
+  --contains-highlight-background-color: var(--accent-wash);
+}
+.equation-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.composer-checkbox {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin: 24px 0 0;
+}
+.cm-editor .cm-vim-panel {
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 18px;
+  font:
+    13px ui-monospace,
+    monospace;
+}
+.cm-editor .cm-fat-cursor {
+  background: var(--accent-wash);
+  outline-color: var(--accent);
+}
+.cm-editor:not(.cm-focused) .cm-fat-cursor {
+  outline-color: var(--accent);
+}
+.cm-editor .cm-vim-panel input {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.settings-help {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.reading-vim-command {
+  padding: 8px 18px;
+  background: var(--surface);
+  color: var(--text);
+  font:
+    13px ui-monospace,
+    monospace;
+}
+.reading-vim-command label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.reading-vim-command input {
+  flex: 1;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 6px;
+}
 @media (pointer: coarse) {
-  .editor-options .icon-button, .format-tools .icon-button { min-width: 44px; min-height: 44px; }
-  .equation-templates button, .note-layout-controls select { min-height: 44px; }
+  .editor-options .icon-button,
+  .format-tools .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .equation-templates button,
+  .note-layout-controls select {
+    min-height: 44px;
+  }
 }
 .note-metadata {
   display: flex;

@@ -1,4 +1,11 @@
 import { useSlateApp } from "./useSlateApp";
+import { useState } from "react";
+import { FileTitle } from "./markdown/FileTitle";
+import { SidebarResize } from "./ui/SidebarResize";
+import { MobileDrawer } from "./ui/MobileDrawer";
+import { useDrawerGestures } from "./ui/useDrawerGestures";
+import { useTabReorder } from "./ui/useTabReorder";
+import type { LibraryItem } from "./ui/drag";
 import { workspace } from "./core/workspace";
 import { Navigation } from "./ui/Navigation";
 import { Library } from "./ui/Library";
@@ -36,6 +43,7 @@ import {
   PanelRightClose,
   Check,
   HardDrive,
+  Settings as SettingsIcon,
   X,
   Search,
   Library as LibraryIcon,
@@ -47,6 +55,41 @@ import {
 } from "lucide-react";
 export default function SlateApp() {
   const app = useSlateApp();
+  const tabDrag = useTabReorder(app.tabs, app.reorderTab);
+  const drawerSide = useDrawerGestures({
+    compact: app.compact,
+    sidebar: app.sidebar,
+    context: app.context && !!app.selected,
+    hasDocument: !!app.selected,
+    onSidebar: app.setSidebar,
+    onContext: app.setContext,
+  });
+  const [newNoteFolder, setNewNoteFolder] = useState<string | null>(null);
+  async function move(item: LibraryItem, parentId: string | null) {
+    try {
+      if (item.kind === "folder") await workspace.moveFolder(item.id, parentId);
+      else await workspace.moveDocument(item.id, parentId);
+      app.notify(item.kind === "folder" ? "Folder moved" : "File moved");
+    } catch (error) {
+      app.notify(
+        error instanceof Error ? error.message : "Could not move this item.",
+        undefined,
+        true,
+      );
+    }
+  }
+  async function restoreFolder(folder: SlateFolder) {
+    try {
+      await workspace.restoreFolder(folder.id);
+      app.notify("Folder restored");
+    } catch (error) {
+      app.notify(
+        error instanceof Error ? error.message : "Could not restore this folder.",
+        undefined,
+        true,
+      );
+    }
+  }
   const documentActions = (doc: SlateDocument): MenuAction[] =>
     doc.trashedAt
       ? [
@@ -102,9 +145,28 @@ export default function SlateApp() {
       onClick: () => app.setFolderDialog({ folder }),
     },
     {
+      label: "New note",
+      icon: <FileText size={16} />,
+      onClick: () => setNewNoteFolder(folder.id),
+    },
+    {
       label: "New subfolder",
       icon: <Plus size={16} />,
       onClick: () => app.setFolderDialog({ parentId: folder.id }),
+    },
+    {
+      label: "Delete folder",
+      icon: <Trash2 size={16} />,
+      danger: true,
+      separator: true,
+      onClick: () => {
+        void workspace
+          .trashFolder(folder.id)
+          .then(() =>
+            app.notify("Folder and its notes moved to Trash", () => void restoreFolder(folder)),
+          )
+          .catch((error) => app.notify(error.message, undefined, true));
+      },
     },
   ];
   const navigation = (
@@ -126,6 +188,7 @@ export default function SlateApp() {
       documentActions={documentActions}
       folderActions={folderActions}
       onClose={() => app.setSidebar(false)}
+      onMove={(item, parentId) => void move(item, parentId)}
     />
   );
   const doc = app.selected;
@@ -150,7 +213,13 @@ export default function SlateApp() {
         )[app.view];
   return (
     <div
-      className={"slate-app " + (app.sidebar && !app.compact ? "with-sidebar" : "without-sidebar")}
+      className={
+        "slate-app " +
+        (app.sidebar && !app.compact ? "with-sidebar" : "without-sidebar") +
+        (doc ? " has-document" : "")
+      }
+      style={{ "--sidebar-width": app.preferences.sidebarWidth + "px" } as React.CSSProperties}
+      data-platform={/Android/i.test(navigator.userAgent) ? "android" : "desktop"}
     >
       <a className="skip-link" href="#main-content">
         Skip to workspace
@@ -158,149 +227,203 @@ export default function SlateApp() {
       {!app.compact && app.sidebar && (
         <aside className="sidebar" aria-label="Library navigation">
           {navigation}
+          <SidebarResize width={app.preferences.sidebarWidth} />
         </aside>
       )}
       {app.compact && (
-        <Modal
+        <MobileDrawer
+          side="left"
           open={app.sidebar}
+          dragging={drawerSide === "left"}
           onOpenChange={app.setSidebar}
           title="Library"
-          className="navigation-modal"
         >
           {navigation}
-        </Modal>
+        </MobileDrawer>
+      )}
+      {app.compact && doc && (
+        <MobileDrawer
+          side="right"
+          open={app.context}
+          dragging={drawerSide === "right"}
+          title="Document context"
+          onOpenChange={app.setContext}
+        >
+          <ContextPanel
+            doc={doc}
+            documents={app.documents}
+            onOpen={app.open}
+            onLink={(name) => void app.openLink(name)}
+            onHeading={(line) => {
+              app.getEditor(doc.id).current?.goToLine(line);
+              app.setContext(false);
+            }}
+            onClose={() => app.setContext(false)}
+          />
+        </MobileDrawer>
+      )}
+      {app.compact && (
+        <>
+          <button
+            className="drawer-edge drawer-edge-left"
+            data-drawer-edge="left"
+            aria-label="Show library"
+            onClick={() => app.setSidebar(true)}
+          />
+          {doc && (
+            <button
+              className="drawer-edge drawer-edge-right"
+              data-drawer-edge="right"
+              aria-label="Show document context"
+              onClick={() => app.setContext(true)}
+            />
+          )}
+        </>
       )}
       <div className="workspace-shell">
-        <header className="workspace-topbar">
-          <div className="workspace-breadcrumb">
-            {(!app.sidebar || app.compact) && (
-              <IconButton label="Show library" onClick={() => app.setSidebar(true)}>
-                <PanelLeftOpen size={19} />
-              </IconButton>
-            )}
-            {app.compact && doc ? (
-              <IconButton label="Back to library" onClick={() => app.goLibrary()}>
-                <ArrowLeft size={18} />
-              </IconButton>
-            ) : null}
-            <button onClick={() => app.goLibrary("library")}>
-              {app.compact && !doc ? (
-                <SlateMark size={23} />
-              ) : (
-                app.vault?.name || app.preferences.workspaceName
-              )}
-            </button>
-            <ChevronRight size={13} />
-            {doc ? (
-              <button
-                onClick={() => app.goLibrary(docFolder ? "folder:" + docFolder.id : "library")}
-              >
-                {docFolder?.name || "Unfiled"}
-              </button>
-            ) : (
-              <span>{title || "Library"}</span>
-            )}
-          </div>
-          <div className="topbar-actions">
-            <span
-              className={"local-status " + (app.error ? "save-error" : "")}
-              title={app.error || "Your workspace is stored locally"}
-            >
-              {app.error ? (
-                <AlertCircle size={14} />
-              ) : app.saving || app.busy ? (
-                <span className="saving-indicator" />
-              ) : (
-                <Check size={14} />
-              )}
-              <span>
-                {app.busy
-                  ? "Importing…"
-                  : app.error
-                    ? "Save needs attention"
-                    : app.saving
-                      ? "Saving…"
-                      : "Saved on this device"}
+        <div className="workspace-topbar-slot" aria-hidden={!!doc} inert={!!doc}>
+          <div className="chrome-clip">
+            <header className="workspace-topbar">
+              <span className="mobile-workspace-mark">
+                <SlateMark size={26} />
               </span>
-            </span>
-            {app.canCancelImport && (
-              <button className="quiet-button" onClick={app.cancelImport}>
-                Cancel import
-              </button>
-            )}
-            <IconButton
-              label="Search workspace"
-              className="compact-search"
-              onClick={() => app.setSearch(true)}
-            >
-              <Search size={18} />
-            </IconButton>
-            <button
-              aria-label="Import documents"
-              className="quiet-button import-button"
-              disabled={!!app.busy}
-              onClick={() => app.fileInput.current?.click()}
-            >
-              <Upload size={16} />
-              <span>Import</span>
-            </button>
-            <Menu
-              label="Vault options"
-              trigger={
-                <button className="quiet-button vault-button" disabled={!!app.busy}>
-                  <FolderOpen size={16} />
-                  <span>{app.vault ? "Vault" : "Open vault"}</span>
-                  <ChevronDown size={13} />
+              <div className="workspace-breadcrumb">
+                {!app.sidebar && !app.compact && (
+                  <IconButton label="Show library" onClick={() => app.setSidebar(true)}>
+                    <PanelLeftOpen size={19} />
+                  </IconButton>
+                )}
+                {app.compact && doc ? (
+                  <IconButton label="Back to library" onClick={() => app.goLibrary()}>
+                    <ArrowLeft size={18} />
+                  </IconButton>
+                ) : null}
+                <button onClick={() => app.goLibrary("library")}>
+                  {app.compact && !doc ? (
+                    <SlateMark size={23} />
+                  ) : (
+                    app.vault?.name || app.preferences.workspaceName
+                  )}
                 </button>
-              }
-              items={[
-                {
-                  label: "Open vault folder",
-                  icon: <FolderOpen size={16} />,
-                  onClick: () => void app.openVault(),
-                },
-                ...(app.vault
-                  ? [
-                      {
-                        label: "Refresh vault files",
-                        icon: <RefreshCw size={16} />,
-                        onClick: () => void app.openVault(false, true),
-                      },
-                      {
-                        label: "Open local workspace",
-                        icon: <HardDrive size={16} />,
-                        onClick: () => void app.openVault(true),
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-            <Menu
-              trigger={
-                <button className="primary-button new-note-button" disabled={!!app.busy}>
-                  <Plus size={17} />
-                  <span>New note</span>
-                  <ChevronDown size={13} />
-                </button>
-              }
-              label="Create document"
-              items={[
-                {
-                  label: "Markdown",
-                  icon: <FileText size={17} />,
-                  onClick: () => void app.create("note"),
-                },
-                {
-                  label: "Notebook",
-                  icon: <NotebookPen size={17} />,
-                  onClick: () => void app.create("notebook"),
-                },
-              ]}
-            />
+                <ChevronRight size={13} />
+                {doc ? (
+                  <button
+                    onClick={() => app.goLibrary(docFolder ? "folder:" + docFolder.id : "library")}
+                  >
+                    {docFolder?.name || "Unfiled"}
+                  </button>
+                ) : (
+                  <span>{title || "Library"}</span>
+                )}
+              </div>
+              <div className="topbar-actions">
+                <span
+                  className={"local-status " + (app.error ? "save-error" : "")}
+                  title={app.error || "Your workspace is stored locally"}
+                >
+                  {app.error ? (
+                    <AlertCircle size={14} />
+                  ) : app.saving || app.busy ? (
+                    <span className="saving-indicator" />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  <span>
+                    {app.busy
+                      ? "Importing…"
+                      : app.error
+                        ? "Save needs attention"
+                        : app.saving
+                          ? "Saving…"
+                          : "Saved on this device"}
+                  </span>
+                </span>
+                {app.canCancelImport && (
+                  <button className="quiet-button" onClick={app.cancelImport}>
+                    Cancel import
+                  </button>
+                )}
+                <IconButton
+                  label="Search workspace"
+                  className="compact-search"
+                  onClick={() => app.setSearch(true)}
+                >
+                  <Search size={18} />
+                </IconButton>
+                <Menu
+                  label="Vault options"
+                  trigger={
+                    <button
+                      aria-label="Vault options"
+                      title="Vault options"
+                      className="quiet-button vault-button"
+                      disabled={!!app.busy}
+                    >
+                      <FolderOpen size={16} />
+                      <span>{app.vault ? "Vault" : "Open vault"}</span>
+                      <ChevronDown size={13} />
+                    </button>
+                  }
+                  items={[
+                    {
+                      label: "Open vault folder",
+                      icon: <FolderOpen size={16} />,
+                      onClick: () => void app.openVault(),
+                    },
+                    {
+                      label: "Import documents",
+                      icon: <Upload size={16} />,
+                      onClick: () => app.fileInput.current?.click(),
+                    },
+                    ...(app.vault
+                      ? [
+                          {
+                            label: "Refresh vault files",
+                            icon: <RefreshCw size={16} />,
+                            onClick: () => void app.openVault(false, true),
+                          },
+                          {
+                            label: "Open local workspace",
+                            icon: <HardDrive size={16} />,
+                            onClick: () => void app.openVault(true),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+                <Menu
+                  trigger={
+                    <button
+                      aria-label="New note"
+                      title="New note"
+                      className="primary-button new-note-button"
+                      disabled={!!app.busy}
+                    >
+                      <Plus size={17} />
+                      <span>New note</span>
+                      <ChevronDown size={13} />
+                    </button>
+                  }
+                  label="Create document"
+                  items={[
+                    {
+                      label: "Markdown",
+                      icon: <FileText size={17} />,
+                      onClick: () => void app.create("note"),
+                    },
+                    {
+                      label: "Notebook",
+                      icon: <NotebookPen size={17} />,
+                      onClick: () => void app.create("notebook"),
+                    },
+                  ]}
+                />
+              </div>
+            </header>
           </div>
-        </header>
+        </div>
         {app.tabs.length > 0 && (
-          <nav className="document-tabs" aria-label="Open documents">
+          <nav className="document-tabs" aria-label="Open documents" {...tabDrag}>
             <button
               aria-label="Library"
               className={"library-tab " + (!app.active ? "active" : "")}
@@ -319,6 +442,16 @@ export default function SlateApp() {
                   items={[
                     ...documentActions(item),
                     {
+                      label: "Move tab left",
+                      disabled: app.tabs.indexOf(id) === 0,
+                      onClick: () => app.reorderTab(id, app.tabs.indexOf(id) - 1),
+                    },
+                    {
+                      label: "Move tab right",
+                      disabled: app.tabs.indexOf(id) === app.tabs.length - 1,
+                      onClick: () => app.reorderTab(id, app.tabs.indexOf(id) + 1),
+                    },
+                    {
                       label: "Close tab",
                       icon: <X size={16} />,
                       onClick: () => app.closeTab(id),
@@ -326,11 +459,28 @@ export default function SlateApp() {
                     },
                   ]}
                 >
-                  <div className={"document-tab " + (app.active === id ? "active" : "")} key={id}>
+                  <div
+                    className={"document-tab " + (app.active === id ? "active" : "")}
+                    data-tab-id={id}
+                    key={id}
+                  >
                     <button
                       title={item.title}
                       aria-current={app.active === id ? "page" : undefined}
                       onClick={() => app.open(item)}
+                      onKeyDown={(event) => {
+                        if (
+                          event.altKey &&
+                          event.shiftKey &&
+                          (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                        ) {
+                          event.preventDefault();
+                          app.reorderTab(
+                            id,
+                            app.tabs.indexOf(id) + (event.key === "ArrowLeft" ? -1 : 1),
+                          );
+                        }
+                      }}
                       onAuxClick={(e) => {
                         if (e.button === 1) app.closeTab(id);
                       }}
@@ -399,26 +549,35 @@ export default function SlateApp() {
                   folderActions={folderActions}
                   onRestore={app.restoreDoc}
                   onSearch={() => app.setSearch(true)}
+                  onMove={(item, parentId) => void move(item, parentId)}
+                  onRestoreFolder={(folder) => void restoreFolder(folder)}
                 />
               </div>
               {doc && (
                 <div className="document-titlebar">
+                  {!app.compact && !app.sidebar && (
+                    <IconButton label="Show library" onClick={() => app.setSidebar(true)}>
+                      <PanelLeftOpen size={19} />
+                    </IconButton>
+                  )}
+                  {app.compact && (
+                    <IconButton label="Back to library" onClick={() => app.goLibrary()}>
+                      <ArrowLeft size={19} />
+                    </IconButton>
+                  )}
                   <h1 className="sr-only">{doc.title}</h1>
                   <span className="document-title-icon">
                     <KindIcon kind={doc.kind} size={18} />
                   </span>
-                  <input
-                    aria-label="Document title"
-                    value={doc.title}
-                    onChange={(e) => workspace.update(doc.id, { title: e.target.value })}
-                    onBlur={() => {
-                      if (!doc.title.trim())
-                        workspace.update(doc.id, {
-                          title: "Untitled " + (doc.kind === "notebook" ? "notebook" : "note"),
-                        });
-                    }}
-                    maxLength={200}
-                  />
+                  {app.compact ? (
+                    <span className="document-name">{doc.title}</span>
+                  ) : (
+                    <FileTitle
+                      title={doc.title}
+                      label="Document title"
+                      rename={(value) => workspace.renameDocument(doc.id, value)}
+                    />
+                  )}
                   <div className="document-title-actions">
                     <IconButton
                       label={doc.starred ? "Remove from Starred" : "Add to Starred"}
@@ -442,11 +601,24 @@ export default function SlateApp() {
                         </IconButton>
                       }
                       items={[
-                        {
-                          label: "Rename file",
-                          icon: <Pencil size={16} />,
-                          onClick: () => app.setRenameDoc(doc),
-                        },
+                        ...(app.compact
+                          ? [
+                              {
+                                label: doc.starred ? "Remove from Starred" : "Add to Starred",
+                                icon: <Star size={16} />,
+                                onClick: () => app.star(doc),
+                              },
+                            ]
+                          : []),
+                        ...(!app.compact
+                          ? [
+                              {
+                                label: "Rename file",
+                                icon: <Pencil size={16} />,
+                                onClick: () => app.setRenameDoc(doc),
+                              },
+                            ]
+                          : []),
                         {
                           label:
                             doc.kind === "note"
@@ -489,7 +661,9 @@ export default function SlateApp() {
                 </div>
               )}
               <div
-                className={"document-stage " + (app.context && doc ? "with-context" : "")}
+                className={
+                  "document-stage " + (app.context && doc && !app.compact ? "with-context" : "")
+                }
                 hidden={!doc}
               >
                 <div className="document-panes">
@@ -517,7 +691,7 @@ export default function SlateApp() {
                     );
                   })}
                 </div>
-                {doc && app.context && (
+                {doc && app.context && !app.compact && (
                   <ContextPanel
                     key={doc.id}
                     doc={doc}
@@ -532,20 +706,31 @@ export default function SlateApp() {
             </>
           )}
         </main>
-        <nav className="mobile-navigation" aria-label="Mobile workspace">
-          <button className={!doc ? "active" : ""} onClick={() => app.goLibrary("library")}>
-            <LibraryIcon size={20} />
-            <span>Library</span>
-          </button>
-          <button onClick={() => app.setSearch(true)}>
-            <Search size={20} />
-            <span>Search</span>
-          </button>
-          <button onClick={() => app.setSettings(true)}>
-            <HardDrive size={20} />
-            <span>Workspace</span>
-          </button>
-        </nav>
+        <div className="mobile-navigation-slot" aria-hidden={!!doc} inert={!!doc}>
+          <div className="chrome-clip">
+            <nav className="mobile-navigation" aria-label="Mobile workspace">
+              <button
+                className={!doc ? "active" : ""}
+                aria-haspopup={!doc && app.view === "library" ? "dialog" : undefined}
+                title={!doc && app.view === "library" ? "Open library navigation" : "Library"}
+                onClick={() =>
+                  !doc && app.view === "library" ? app.setSidebar(true) : app.goLibrary("library")
+                }
+              >
+                <LibraryIcon size={20} />
+                <span>Library</span>
+              </button>
+              <button onClick={() => app.setSearch(true)}>
+                <Search size={20} />
+                <span>Search</span>
+              </button>
+              <button onClick={() => app.setSettings(true)}>
+                <SettingsIcon size={20} />
+                <span>Settings</span>
+              </button>
+            </nav>
+          </div>
+        </div>
       </div>
       <input
         hidden
@@ -617,7 +802,43 @@ export default function SlateApp() {
         onClose={() => app.setFolderDialog(null)}
         onSaved={(id) => app.goLibrary("folder:" + id)}
       />
-      <MoveDialog doc={app.moveDoc} folders={app.folders} onClose={() => app.setMoveDoc(null)} />
+      <MoveDialog
+        doc={app.moveDoc}
+        folders={app.folders.filter((folder) => !folder.trashedAt)}
+        onClose={() => app.setMoveDoc(null)}
+      />
+      <Modal
+        open={newNoteFolder !== null}
+        onOpenChange={(open) => {
+          if (!open) setNewNoteFolder(null);
+        }}
+        title="New note"
+        description="Choose the kind of note to create in this folder."
+        className="small-modal"
+      >
+        <div className="new-note-choices">
+          <button
+            className="secondary-button"
+            onClick={() => {
+              void app.create("note", newNoteFolder);
+              setNewNoteFolder(null);
+            }}
+          >
+            <FileText size={20} />
+            <span>Markdown</span>
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => {
+              void app.create("notebook", newNoteFolder);
+              setNewNoteFolder(null);
+            }}
+          >
+            <NotebookPen size={20} />
+            <span>Notebook</span>
+          </button>
+        </div>
+      </Modal>
       <RenameDialog
         doc={app.renameDoc}
         onClose={() => app.setRenameDoc(null)}

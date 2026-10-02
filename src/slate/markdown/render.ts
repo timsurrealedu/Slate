@@ -1,4 +1,4 @@
-import { Marked } from "marked";
+import { Marked, type TokensList } from "marked";
 import DOMPurify from "dompurify";
 import katex from "katex";
 import { frontmatter, metadataTags, inlineTag } from "./metadata";
@@ -13,6 +13,21 @@ export const mathHtml = (text: string, display = false) =>
     output: "htmlAndMathml",
   });
 const markdown = new Marked({ gfm: true, breaks: false });
+export function markdownBlocks(source: string) {
+  let from = 0;
+  const tokens = markdown.lexer(source);
+  return tokens.map((token) => {
+    const block = {
+      from,
+      to: from + token.raw.length,
+      type: token.type,
+      source: token.raw,
+      links: tokens.links,
+    };
+    from = block.to;
+    return block;
+  });
+}
 export const tagHtml = (tag: string) =>
   '<a class="tag-link" href="#slate-tag=' +
   encodeURIComponent(tag) +
@@ -49,10 +64,63 @@ export function localImageReferences(source: string) {
 markdown.use({
   renderer: {
     html({ text }) {
-      return escape(text);
+      return text;
+    },
+    blockquote({ text, tokens }) {
+      const callout = /^\[!([\w-]+)\]([+-])?[ \t]*([^\n]*)(?:\n|$)/.exec(text);
+      if (!callout) return "<blockquote>" + this.parser.parse(tokens) + "</blockquote>";
+      const title = escape(
+        callout[3].trim() || callout[1].charAt(0).toUpperCase() + callout[1].slice(1),
+      );
+      const body = this.parser.parse(markdown.lexer(text.slice(callout[0].length)));
+      return callout[2]
+        ? `<details class="prose-callout"${callout[2] === "+" ? " open" : ""}><summary>${title}</summary>${body}</details>`
+        : `<aside class="prose-callout"><strong class="callout-title">${title}</strong>${body}</aside>`;
     },
   },
   extensions: [
+    {
+      name: "obsidianBlockComment",
+      level: "block",
+      tokenizer(src) {
+        const match = /^ {0,3}%%[\s\S]*?%%(?:[ \t]*\n)?/.exec(src);
+        if (match) return { type: "obsidianBlockComment", raw: match[0] };
+      },
+      renderer: () => "",
+    },
+    {
+      name: "obsidianComment",
+      level: "inline",
+      start: (src) => src.indexOf("%%"),
+      tokenizer(src) {
+        const match = /^%%[\s\S]*?%%/.exec(src);
+        if (match) return { type: "obsidianComment", raw: match[0] };
+      },
+      renderer: () => "",
+    },
+    {
+      name: "highlight",
+      level: "inline",
+      start: (src) => src.indexOf("=="),
+      tokenizer(src) {
+        const match = /^==(?=\S)([^\n]+?)==/.exec(src);
+        if (match)
+          return { type: "highlight", raw: match[0], tokens: this.lexer.inlineTokens(match[1]) };
+      },
+      renderer(token) {
+        return "<mark>" + this.parser.parseInline(token.tokens || []) + "</mark>";
+      },
+    },
+    {
+      name: "tag",
+      level: "inline",
+      start: (src) => src.search(inlineTag),
+      tokenizer(src) {
+        const match = new RegExp(inlineTag.source, "u").exec(src);
+        if (match?.index === 0) return { type: "tag", raw: match[0], tag: match[1] };
+      },
+      renderer: (token) => tagHtml(token.tag),
+    },
     {
       name: "wiki",
       level: "inline",
@@ -108,12 +176,18 @@ markdown.use({
     },
   ],
 });
-export function renderMarkdown(source: string, assets?: Map<string, string>, numbered = false) {
+export function renderMarkdown(
+  source: string,
+  assets?: Map<string, string>,
+  numbered = false,
+  links?: TokensList["links"],
+) {
   if (typeof window === "undefined") return "";
   const metadata = frontmatter(source);
   let text = (metadata?.body ?? source).replace(/!\[\[([^\]\n]+)\]\]/g, (_raw, inner: string) => {
     const [path, label] = inner.split("|");
-    return "![" + (label || path).replace(/[\[\]]/g, "") + "](<" + path.replace(/[<>]/g, "") + ">)";
+    const alt = label && /^\d+(?:x\d+)?$/.test(label) ? path + "|" + label : label || path;
+    return "![" + alt.replace(/[[\]]/g, "") + "](<" + path.replace(/[<>]/g, "") + ">)";
   });
   if (assets) text = text.replace(/attachment:([a-z0-9-]+)/gi, (raw, id) => assets.get(id) || raw);
   let html: string;
@@ -127,7 +201,7 @@ export function renderMarkdown(source: string, assets?: Map<string, string>, num
         if (token.type === "space") return "";
         const block = Object.assign([token], { links: tokens.links });
         return (
-          '<div class="reading-block" data-line-number="' +
+          '<div class="reading-block markdown-block" data-line-number="' +
           start +
           '" data-source-line="' +
           start +
@@ -137,18 +211,41 @@ export function renderMarkdown(source: string, assets?: Map<string, string>, num
         );
       })
       .join("");
-  } else html = markdown.parse(text) as string;
+  } else {
+    const definitions = links
+      ? Object.entries(links)
+          .map(
+            ([name, link]) =>
+              `[${name}]: <${link.href}>${link.title ? " " + JSON.stringify(link.title) : ""}`,
+          )
+          .join("\n")
+      : "";
+    const tokens = markdown.lexer(text + (definitions ? "\n\n" + definitions : ""));
+    html = tokens
+      .map((token) => {
+        if (token.type === "space") return "";
+        const rendered = markdown.parser(Object.assign([token], { links: tokens.links }));
+        return rendered ? '<div class="markdown-block">' + rendered + "</div>" : "";
+      })
+      .join("");
+  }
   html = metadataHtml(source) + html;
   const clean = DOMPurify.sanitize(html, {
     ADD_ATTR: ["data-note"],
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
     USE_PROFILES: { html: true, mathMl: true, svg: true },
-    FORBID_TAGS: ["style", "iframe", "object", "embed"],
+    FORBID_TAGS: ["style", "iframe", "object", "embed", "base", "link", "meta", "form"],
     ALLOW_DATA_ATTR: true,
   });
   const template = document.createElement("template");
   template.innerHTML = clean;
   template.content.querySelectorAll("img").forEach((img) => {
+    const dimensions = /^(.*)\|(\d+)(?:x(\d+))?$/.exec(img.alt);
+    if (dimensions) {
+      img.alt = dimensions[1];
+      img.width = Math.min(8192, Math.max(1, Number(dimensions[2])));
+      if (dimensions[3]) img.height = Math.min(8192, Math.max(1, Number(dimensions[3])));
+    }
     const local = assets?.get(img.getAttribute("src") || "");
     if (local) img.setAttribute("src", local);
     if (!/^(blob:|data:image\/(?:png|jpe?g|webp|gif);)/i.test(img.getAttribute("src") || "")) {
@@ -170,33 +267,21 @@ export function renderMarkdown(source: string, assets?: Map<string, string>, num
       ),
     );
   template.content.querySelectorAll("a").forEach((a) => {
+    const href = a.getAttribute("href") || "";
+    if (
+      !a.dataset.note &&
+      !a.dataset.tag &&
+      !/^[a-z][a-z\d+.-]*:|^\/\//i.test(href) &&
+      /\.md(?:#|$)|^#[^#]/i.test(href)
+    ) {
+      a.dataset.note = href;
+      a.classList.add("wiki-link");
+    }
     if (!a.dataset.note && !a.dataset.tag) {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
     }
   });
-  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT),
-    nodes: Text[] = [];
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text;
-    if (!node.parentElement?.closest("a,code,pre,button,.katex,.note-metadata")) nodes.push(node);
-  }
-  for (const node of nodes) {
-    const value = node.textContent || "",
-      matches = [...value.matchAll(inlineTag)];
-    if (!matches.length) continue;
-    const fragment = document.createDocumentFragment();
-    let offset = 0;
-    for (const match of matches) {
-      fragment.append(document.createTextNode(value.slice(offset, match.index)));
-      const link = document.createElement("template");
-      link.innerHTML = tagHtml(match[1]);
-      fragment.append(link.content);
-      offset = match.index! + match[0].length;
-    }
-    fragment.append(document.createTextNode(value.slice(offset)));
-    node.replaceWith(fragment);
-  }
   return template.innerHTML;
 }
 export function sanitizeDocx(html: string) {

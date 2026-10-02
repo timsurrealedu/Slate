@@ -8,6 +8,7 @@ mkdirSync(scratch, { recursive: true });
 const profile = mkdtempSync(join(scratch, "native-vault-"));
 const root = join(profile, "Existing vault");
 mkdirSync(join(root, "Course"), { recursive: true });
+mkdirSync(join(root, "Archived elsewhere"), { recursive: true });
 const text = "# Lesson\n\nExisting Markdown.\n\n![Diagram](diagram.png)\n";
 writeFileSync(join(root, "Course", "Lesson.md"), text);
 writeFileSync(join(root, "Course", "diagram.png"), readFileSync("artifacts/fixtures/sample.png"));
@@ -40,8 +41,15 @@ try {
   }, root);
   await page.locator(".vault-button").click();
   await page.getByRole("menuitem", { name: "Open vault folder", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Archived elsewhere", exact: true })).toHaveCount(
+    1,
+  );
   await page.getByLabel("Open Lesson", { exact: true }).first().click();
   await page.getByRole("button", { name: "Reading", exact: true }).click();
+  await expect(page.locator(".reading-prose h1")).toHaveCount(1);
+  await expect(
+    page.locator(".reading-prose").getByLabel("File title", { exact: true }),
+  ).toHaveValue("Lesson");
   await expect
     .poll(() => page.locator(".reading-prose img").evaluate((element) => element.naturalWidth))
     .toBeGreaterThan(0);
@@ -49,11 +57,14 @@ try {
   await source(page, revised);
   await expect.poll(() => readFileSync(join(root, "Course", "Lesson.md"), "utf8")).toBe(revised);
   await close();
+  rmSync(join(root, "Archived elsewhere"), { recursive: true });
   page = await launch();
-  if (!(await page.getByLabel("Document title", { exact: true }).isVisible()))
-    await page.getByLabel("Open Lesson", { exact: true }).first().click();
   await expect(page.getByLabel("Document title", { exact: true })).toHaveValue("Lesson");
+  await expect(page).toHaveURL(/#doc=.+$/);
   expect((await latest(page)).content).toBe(revised);
+  await expect(page.getByRole("button", { name: "Archived elsewhere", exact: true })).toHaveCount(
+    0,
+  );
   const originalId = (await latest(page)).id;
   await page
     .getByRole("navigation", { name: "Folders", exact: true })
@@ -69,23 +80,29 @@ try {
   await page.getByLabel("File name").fill("Lecture");
   await page.getByRole("button", { name: "Save name", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect.poll(() => readFileSync(join(root, "Studies", "Lecture.md"), "utf8")).toBe(revised);
+  const renamed = revised.replace("# Lesson\n", "# Lecture\n");
+  await expect.poll(() => readFileSync(join(root, "Studies", "Lecture.md"), "utf8")).toBe(renamed);
   expect((await latest(page)).id).toBe(originalId);
   await page.getByRole("button", { name: "Reading", exact: true }).click();
+  await expect(page.locator(".reading-prose h1")).toHaveCount(1);
+  await expect(
+    page.locator(".reading-prose").getByLabel("File title", { exact: true }),
+  ).toHaveValue("Lecture");
   await expect
     .poll(() => page.locator(".reading-prose img").evaluate((element) => element.naturalWidth))
     .toBeGreaterThan(0);
   await close();
   page = await launch();
-  await page.getByLabel("Open Lecture", { exact: true }).first().click();
   await expect(page.getByLabel("Document title", { exact: true })).toHaveValue("Lecture");
+  await expect(page).toHaveURL(/#doc=.+$/);
   expect((await latest(page)).id).toBe(originalId);
+  await page.locator(".library-tab").click();
   await page.locator(".vault-button").click();
   await page.getByRole("menuitem", { name: "Open local workspace", exact: true }).click();
   await expect(
     page.getByLabel("Open Linear transformations", { exact: true }).first(),
   ).toBeVisible();
-  expect(readFileSync(join(root, "Studies", "Lecture.md"), "utf8")).toBe(revised);
+  expect(readFileSync(join(root, "Studies", "Lecture.md"), "utf8")).toBe(renamed);
   await close();
   expect(errors).toEqual([]);
   console.log(
@@ -96,6 +113,7 @@ try {
       relaunch: "pass",
       localWorkspaceRetained: "pass",
       renameAndStableIdentity: "pass",
+      externalFolderDeletionOnStartup: "pass",
     }),
   );
 } finally {

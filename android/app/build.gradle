@@ -4,6 +4,11 @@ def slateKeyPassword = System.getenv("SLATE_ANDROID_KEY_PASSWORD")
 if ((slateKeystore == null) != (slateKeyPassword == null)) {
     throw new GradleException("Both Slate signing credentials must be configured.")
 }
+gradle.taskGraph.whenReady { graph ->
+    if (slateKeystore == null && graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
+        throw new GradleException("Release APKs require Slate's preserved signing identity. Use npm run android:release -- --password-file <private-file>.")
+    }
+}
 
 android {
     namespace = "app.slate.workspace"
@@ -12,8 +17,8 @@ android {
         applicationId "app.slate.workspace"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        versionCode 7
+        versionName "0.1.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

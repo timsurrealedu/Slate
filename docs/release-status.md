@@ -1,5 +1,7 @@
 # Release status
 
+The current local behavior update is Slate 0.1.6 / Android versionCode 7. Packages are in `releases/2026-10-02-behavior`; see [behavior validation](behavior-2026-10-02.md). The records below describe the original release.
+
 The sections below describe the earlier 0.1.0 distribution. The maintained Codex application's 2026-10-01 update, local packages, and current evidence are in [refinements-2026-10-01.md](refinements-2026-10-01.md) and [validation-2026-10-01.md](validation-2026-10-01.md). The new Android artifact is a debug preview, not a newly signed release update.
 
 Slate 0.1.0 provides the shared study core, an independent offline-capable static build, x64 Windows/Linux application packages, and a Debian/Ubuntu package. The Android project now provides a signed release APK. These are preview builds; physical-device release validation remains open.

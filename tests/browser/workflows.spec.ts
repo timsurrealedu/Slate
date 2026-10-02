@@ -17,7 +17,9 @@ test("Markdown keeps its source through all three modes, local images, links and
     "# Study session\n\n## Key ideas\nA **clear** explanation with *emphasis* and `inline code`.\n\n- [ ] Review definitions\n- [x] Work through examples\n\nSee [[Linear transformations]] and [[New concept]].\n\n$$\nE = mc^2\n$$\n\n| Quantity | Meaning |\n| --- | --- |\n| E | Energy |\n\n```python\nprint('energy')\n```\n";
   await source(page, text);
   await page.getByRole("button", { name: "Live preview", exact: true }).click();
-  await expect(page.locator(".document-pane:not([hidden]) .cm-heading").first()).toBeVisible();
+  await expect(page.locator(".document-pane:not([hidden]) .file-title textarea")).toHaveValue(
+    "Study session",
+  );
   await page.getByRole("button", { name: "Reading", exact: true }).click();
   await expect(page.locator(".reading-prose h2")).toHaveText("Key ideas");
   await expect(page.locator(".reading-prose .katex")).toBeVisible();
@@ -56,20 +58,11 @@ test("Notebook uses recent paper, ink is reversible, pages duplicate and ink sur
   await ready(page);
   await page.getByLabel("Open Problem set 03", { exact: true }).first().click();
   const visibleInk = () =>
-    page.locator(".ink-canvas:visible").evaluate((element) => {
-      const canvas = element as HTMLCanvasElement;
-      const pixels = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
-      let count = 0;
-      for (let index = 0; index < pixels.length; index += 4)
-        if (
-          pixels[index + 3] &&
-          pixels[index] < 170 &&
-          pixels[index + 1] < 170 &&
-          pixels[index + 2] < 170
-        )
-          count++;
-      return count;
-    });
+    page
+      .locator(".ink-vector:visible g path")
+      .evaluateAll((paths) =>
+        paths.reduce((sum, path) => sum + (path.getAttribute("d") || "").length, 0),
+      );
   await expect.poll(visibleInk).toBeGreaterThan(100);
   await page.getByRole("button", { name: "Close Problem set 03", exact: true }).click();
   await page.getByRole("button", { name: "New note", exact: true }).click();
@@ -219,7 +212,10 @@ test("Light and dark desktop and phone layouts pass accessibility and stay withi
       .toBe(true);
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Workspace", exact: true }).click();
+  await page
+    .locator(".mobile-navigation")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
   await page.getByRole("button", { name: "Light", exact: true }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.screenshot({ path: "artifacts/phone-library.jpg", type: "jpeg", quality: 85 });

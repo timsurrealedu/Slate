@@ -14,6 +14,7 @@ import {
   Table2,
   Settings2,
   ListOrdered,
+  Type,
 } from "lucide-react";
 import type { SlateDocument } from "../core/model";
 import { workspace, useVisibleWorkspace } from "../core/workspace";
@@ -23,6 +24,7 @@ import { IconButton, Floating } from "./shared";
 import { TableComposer, EquationComposer } from "./MarkdownInsert";
 import { tableAt } from "../markdown/tables";
 import { sanitizeDocx } from "../markdown/render";
+import { titleHeading } from "../markdown/metadata";
 export function DocumentView({
   doc,
   active,
@@ -46,10 +48,48 @@ export function DocumentView({
   const [mode, setMode] = useState<EditorMode>("live");
   const [composer, setComposer] = useState<"table" | "equation" | null>(null);
   const [table, setTable] = useState<ReturnType<typeof tableAt>>(null);
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveHeading = useRef(() => {});
+  saveHeading.current = () => {
+    titleTimer.current = null;
+    const current = workspace.get().documents.find((item) => item.id === doc.id);
+    const title = current && titleHeading(current.content)?.title;
+    if (title && title !== current.title)
+      void workspace.renameDocument(doc.id, title).catch((error) => onToast(error.message));
+  };
+  useEffect(
+    () => () => {
+      if (titleTimer.current) {
+        clearTimeout(titleTimer.current);
+        saveHeading.current();
+      }
+    },
+    [doc.id],
+  );
+  function changeContent(content: string) {
+    const previous = workspace.get().documents.find((item) => item.id === doc.id);
+    workspace.update(doc.id, { content });
+    const heading = titleHeading(content);
+    if (heading?.title !== titleHeading(previous?.content || "")?.title) {
+      if (titleTimer.current) clearTimeout(titleTimer.current);
+      titleTimer.current = heading?.title ? setTimeout(() => saveHeading.current(), 500) : null;
+    }
+  }
   function editTable(position = ref.current?.selection().from || 0) {
     setTable(tableAt(doc.content, position));
     setComposer("table");
   }
+  const formatting = [
+    { label: "Heading", icon: Heading2, run: () => ref.current?.insert("## ") },
+    { label: "Bold", icon: Bold, run: () => ref.current?.insert("**", "**") },
+    { label: "Italic", icon: Italic, run: () => ref.current?.insert("*", "*") },
+    { label: "Bullet list", icon: List, run: () => ref.current?.insert("- ") },
+    { label: "Task list", icon: ListChecks, run: () => ref.current?.insert("- [ ] ") },
+    { label: "Link to note", icon: Link2, run: () => ref.current?.insert("[[", "]]") },
+    { label: "Insert equation", icon: Sigma, run: () => setComposer("equation") },
+    { label: "Insert or edit table", icon: Table2, run: () => editTable() },
+    { label: "Insert local image", icon: Image, run: onImage },
+  ];
   useEffect(() => {
     if (!active) return;
     const edit = (event: Event) => editTable((event as CustomEvent<number>).detail);
@@ -93,6 +133,8 @@ export function DocumentView({
               key={m.id}
               className={mode === m.id ? "active" : ""}
               aria-pressed={mode === m.id}
+              aria-label={m.name}
+              title={m.name}
               onClick={() => setMode(m.id as EditorMode)}
             >
               <m.icon size={15} strokeWidth={1.7} />
@@ -102,44 +144,40 @@ export function DocumentView({
         </div>
         {mode !== "reading" && (
           <div className="format-tools" aria-label="Formatting">
-            <IconButton label="Heading" onClick={() => ref.current?.insert("## ")}>
-              <Heading2 size={17} />
-            </IconButton>
-            <IconButton label="Bold" onClick={() => ref.current?.insert("**", "**")}>
-              <Bold size={16} />
-            </IconButton>
-            <IconButton label="Italic" onClick={() => ref.current?.insert("*", "*")}>
-              <Italic size={16} />
-            </IconButton>
-            <span className="toolbar-divider" />
-            <IconButton label="Bullet list" onClick={() => ref.current?.insert("- ")}>
-              <List size={17} />
-            </IconButton>
-            <IconButton label="Task list" onClick={() => ref.current?.insert("- [ ] ")}>
-              <ListChecks size={17} />
-            </IconButton>
-            <IconButton label="Link to note" onClick={() => ref.current?.insert("[[", "]]")}>
-              <Link2 size={17} />
-            </IconButton>
-            <IconButton label="Insert equation" onClick={() => setComposer("equation")}>
-              <Sigma size={17} />
-            </IconButton>
-            <IconButton label="Insert or edit table" onClick={() => editTable()}>
-              <Table2 size={17} />
-            </IconButton>
-            <IconButton label="Insert local image" onClick={onImage}>
-              <Image size={17} />
-            </IconButton>
+            {formatting.map((action) => (
+              <IconButton key={action.label} label={action.label} onClick={action.run}>
+                <action.icon size={17} />
+              </IconButton>
+            ))}
           </div>
         )}
         <div className="editor-options">
           <IconButton
             label="Show line numbers"
+            className="line-number-trigger"
             aria-pressed={preferences.lineNumbers}
             onClick={() => void workspace.preferences({ lineNumbers: !preferences.lineNumbers })}
           >
             <ListOrdered size={17} />
           </IconButton>
+          {mode !== "reading" && (
+            <Floating
+              trigger={
+                <IconButton label="Formatting" className="compact-format-trigger">
+                  <Type size={18} />
+                </IconButton>
+              }
+            >
+              <div className="compact-format-menu" aria-label="Formatting tools">
+                {formatting.map((action) => (
+                  <button key={action.label} className="quiet-button" onClick={action.run}>
+                    <action.icon size={18} />
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Floating>
+          )}
           <Floating
             trigger={
               <IconButton label="Note layout">
@@ -149,6 +187,17 @@ export function DocumentView({
           >
             <div className="note-layout-controls">
               <h3>Note layout</h3>
+              <button
+                className="quiet-button line-number-option"
+                aria-label="Show line numbers"
+                aria-pressed={preferences.lineNumbers}
+                onClick={() =>
+                  void workspace.preferences({ lineNumbers: !preferences.lineNumbers })
+                }
+              >
+                <ListOrdered size={17} /> Line numbers
+                <span>{preferences.lineNumbers ? "On" : "Off"}</span>
+              </button>
               <label>
                 Column width{" "}
                 <input
@@ -233,7 +282,8 @@ export function DocumentView({
         size={preferences.editorSize}
         preferences={preferences}
         sourcePath={doc.source?.path}
-        onChange={(content) => workspace.update(doc.id, { content })}
+        onChange={changeContent}
+        onRename={(value) => workspace.renameDocument(doc.id, value)}
         onLink={onLink}
         onTag={onTag}
         onProperties={() => {

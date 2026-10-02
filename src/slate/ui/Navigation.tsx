@@ -19,7 +19,7 @@ import {
 import type { SlateDocument, Folder as SlateFolder } from "../core/model";
 import { SlateMark, IconButton, KindIcon, Menu, ContextActions, type MenuAction } from "./shared";
 import { folderChildren, folderName, folderTrail } from "../core/folders";
-import { workspace } from "../core/workspace";
+import { dragItem, dropInto, type LibraryItem } from "./drag";
 interface Props {
   view: string;
   active: string | null;
@@ -38,6 +38,7 @@ interface Props {
   documentActions(doc: SlateDocument): MenuAction[];
   folderActions(folder: SlateFolder): MenuAction[];
   onClose(): void;
+  onMove(item: LibraryItem, parentId: string | null): void;
 }
 export function Navigation(props: Props) {
   const [foldersOpen, setFoldersOpen] = useState(true);
@@ -66,6 +67,8 @@ export function Navigation(props: Props) {
         <ContextActions items={props.folderActions(folder)}>
           <div
             className={"folder-navigation-row " + (selected("folder:" + folder.id) ? "active" : "")}
+            {...dragItem("folder", folder.id, props.onMove)}
+            {...dropInto(folder.id, props.onMove)}
           >
             <IconButton
               label={(open ? "Collapse " : "Expand ") + folderName(folder)}
@@ -95,12 +98,6 @@ export function Navigation(props: Props) {
                   props.onRenameFolder(folder);
                 }
               }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const id = event.dataTransfer.getData("text/slate-document");
-                if (id) workspace.update(id, { folderId: folder.id });
-              }}
             >
               <Folder size={17} strokeWidth={1.6} style={{ color: folder.color }} />
               <span>{folderName(folder)}</span>
@@ -129,6 +126,7 @@ export function Navigation(props: Props) {
                 <ContextActions key={doc.id} items={props.documentActions(doc)}>
                   <button
                     className={"sidebar-document " + (props.active === doc.id ? "active" : "")}
+                    {...dragItem("document", doc.id, props.onMove)}
                     onClick={() => props.onOpen(doc)}
                     onKeyDown={(event) => {
                       if (event.key === "F2") {
@@ -170,6 +168,7 @@ export function Navigation(props: Props) {
             className={selected(item.id) ? "active" : ""}
             aria-current={selected(item.id) ? "page" : undefined}
             onClick={() => props.onView(item.id)}
+            {...(item.id === "library" ? dropInto(null, props.onMove) : {})}
           >
             <item.icon size={18} strokeWidth={1.7} />
             <span>{item.name}</span>
@@ -192,6 +191,26 @@ export function Navigation(props: Props) {
         {foldersOpen && (
           <nav aria-label="Folders">
             {folderChildren(props.folders).map((folder) => branch(folder))}
+            {props.documents
+              .filter((doc) => !doc.folderId && !doc.trashedAt)
+              .map((doc) => (
+                <ContextActions key={doc.id} items={props.documentActions(doc)}>
+                  <button
+                    className={"sidebar-document " + (props.active === doc.id ? "active" : "")}
+                    {...dragItem("document", doc.id, props.onMove)}
+                    onClick={() => props.onOpen(doc)}
+                    onKeyDown={(event) => {
+                      if (event.key === "F2") {
+                        event.preventDefault();
+                        props.onRenameDocument(doc);
+                      }
+                    }}
+                  >
+                    <KindIcon kind={doc.kind} size={14} />
+                    <span>{doc.title}</span>
+                  </button>
+                </ContextActions>
+              ))}
           </nav>
         )}
       </div>

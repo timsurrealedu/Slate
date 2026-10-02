@@ -1,6 +1,7 @@
 const { packager } = require("@electron/packager");
 const fs = require("node:fs");
 const path = require("node:path");
+const { version } = require("../../package.json");
 (async () => {
   const appRoot = path.resolve(__dirname, "../..");
   process.chdir(appRoot);
@@ -15,7 +16,7 @@ const path = require("node:path");
   fs.cpSync("dist/standalone", path.join(stage, "www"), { recursive: true });
   fs.writeFileSync(
     path.join(stage, "package.json"),
-    JSON.stringify({ name: "slate", productName: "Slate", version: "0.1.0", main: "main.cjs" }),
+    JSON.stringify({ name: "slate", productName: "Slate", version, main: "main.cjs" }),
   );
   await packager({
     dir: stage,
@@ -27,7 +28,7 @@ const path = require("node:path");
     asar: true,
     prune: true,
     icon: path.resolve("platform/desktop/slate.ico"),
-    appVersion: "0.1.0",
+    appVersion: version,
     executableName: "Slate",
     win32metadata: {
       CompanyName: "Slate",

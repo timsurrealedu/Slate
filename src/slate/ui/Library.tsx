@@ -27,6 +27,8 @@ import {
 import { folderName, folderChildren, folderTrail } from "../core/folders";
 import { documentTags, frontmatter, metadataTags, previewSource } from "../markdown/metadata";
 import { tagHtml } from "../markdown/render";
+import { dragItem, dropInto, type LibraryItem } from "./drag";
+import { parentFolder } from "../core/folders";
 export type LibraryView = "library" | "recent" | "starred" | "trash" | string;
 interface Props {
   documents: SlateDocument[];
@@ -43,6 +45,8 @@ interface Props {
   folderActions(folder: SlateFolder): MenuAction[];
   onRestore(doc: SlateDocument): void;
   onSearch(): void;
+  onMove(item: LibraryItem, parentId: string | null): void;
+  onRestoreFolder(folder: SlateFolder): void;
 }
 export function Library(props: Props) {
   const [filter, setFilter] = useState("all"),
@@ -128,8 +132,7 @@ export function Library(props: Props) {
         <div
           className={"document-card kind-" + doc.kind}
           key={doc.id}
-          draggable
-          onDragStart={(e) => e.dataTransfer.setData("text/slate-document", doc.id)}
+          {...(doc.trashedAt ? {} : dragItem("document", doc.id, props.onMove))}
         >
           <button
             className="document-open"
@@ -225,17 +228,23 @@ export function Library(props: Props) {
         { label: "Find anything", icon: <Search size={16} />, onClick: props.onSearch },
       ]}
     >
-      <div className="library-scroll">
+      <div
+        className="library-scroll"
+        {...(props.view === "library" || folder ? dropInto(folder?.id || null, props.onMove) : {})}
+      >
         <div className="library-content">
           {folder && (
             <nav className="folder-breadcrumbs" aria-label="Folder path">
-              <button onClick={props.onLibrary}>Library</button>
+              <button onClick={props.onLibrary} {...dropInto(null, props.onMove)}>
+                Library
+              </button>
               {folderTrail(folder, props.folders).map((item) => (
                 <span key={item.id}>
                   <ChevronRight size={14} />
                   <button
                     aria-current={item.id === folder.id ? "page" : undefined}
                     onClick={() => props.onFolder(item.id)}
+                    {...dropInto(item.id, props.onMove)}
                   >
                     {folderName(item)}
                   </button>
@@ -280,7 +289,11 @@ export function Library(props: Props) {
               <div className="folder-grid">
                 {children.map((f) => (
                   <ContextActions key={f.id} items={props.folderActions(f)}>
-                    <div className="library-folder">
+                    <div
+                      className="library-folder"
+                      {...dragItem("folder", f.id, props.onMove)}
+                      {...dropInto(f.id, props.onMove)}
+                    >
                       <button
                         key={f.id}
                         onClick={() => props.onFolder(f.id)}
@@ -289,18 +302,6 @@ export function Library(props: Props) {
                           if (event.key === "F2") {
                             event.preventDefault();
                             props.onRenameFolder(f);
-                          }
-                        }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const doc = props.documents.find(
-                            (d) => d.id === e.dataTransfer.getData("text/slate-document"),
-                          );
-                          if (doc) {
-                            void import("../core/workspace").then(({ workspace }) =>
-                              workspace.update(doc.id, { folderId: f.id }),
-                            );
                           }
                         }}
                       >
@@ -329,6 +330,20 @@ export function Library(props: Props) {
             </section>
           )}
           <section className="collection-section">
+            {props.view === "trash" &&
+              props.folders
+                .filter(
+                  (folder) => folder.trashedAt && !parentFolder(folder, props.folders)?.trashedAt,
+                )
+                .map((folder) => (
+                  <div key={folder.id} className="trashed-folder">
+                    <Folder size={20} />
+                    <span>{folderName(folder)}</span>
+                    <button className="quiet-button" onClick={() => props.onRestoreFolder(folder)}>
+                      Restore folder
+                    </button>
+                  </div>
+                ))}
             <div className="collection-toolbar">
               <div className="type-filters" aria-label="Document types">
                 {[
@@ -420,8 +435,7 @@ export function Library(props: Props) {
                       key={doc.id}
                       className="document-row"
                       role="row"
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData("text/slate-document", doc.id)}
+                      {...(doc.trashedAt ? {} : dragItem("document", doc.id, props.onMove))}
                     >
                       <div role="cell" className="name-cell">
                         <button

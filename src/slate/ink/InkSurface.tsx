@@ -1,6 +1,14 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useId,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import type { Page, Point, Stroke } from "../core/model";
-import { drawPaper, drawStroke } from "./render";
+import { strokePath } from "./render";
 import {
   bounds,
   contains,
@@ -44,9 +52,24 @@ interface Gesture {
 }
 export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props, forwardedRef) {
   const canvasRef = useRef<HTMLCanvasElement>(null),
+    inkRef = useRef<SVGGElement>(null),
+    liveInkRef = useRef<SVGPathElement>(null),
     propsRef = useRef(props);
+  const patternId = useId();
+  const paperLines = useMemo(() => {
+    const { width, height, paper } = props.page;
+    let d = "";
+    if (paper.style === "lined" || paper.style === "grid") {
+      for (let y = paper.style === "lined" ? 74 : paper.spacing; y < height; y += paper.spacing)
+        d += `M${paper.style === "lined" ? 52 : 0},${y}H${paper.style === "lined" ? width - 52 : width}`;
+      if (paper.style === "grid")
+        for (let x = paper.spacing; x < width; x += paper.spacing) d += `M${x},0V${height}`;
+    }
+    return d;
+  }, [props.page.width, props.page.height, props.page.paper]);
   const runtime = useRef({
-    base: null as HTMLCanvasElement | null,
+    vectorStrokes: null as Stroke[] | null,
+    vectorPaths: new Map<string, { element: SVGPathElement; stroke: Stroke }>(),
     strokes: props.page.strokes,
     history: [] as Stroke[][],
     future: [] as Stroke[][],
@@ -88,52 +111,87 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     const canvas = canvasRef.current;
     if (!canvas) return;
     const { page } = propsRef.current;
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.max(page.width, canvas.getBoundingClientRect().width) * ratio;
-    canvas.width = Math.ceil(width);
-    canvas.height = Math.ceil((width * page.height) / page.width);
-    const base = document.createElement("canvas");
-    base.width = canvas.width;
-    base.height = canvas.height;
-    runtime.current.base = base;
-    redrawBase();
+    const displayed = canvas.getBoundingClientRect().width;
+    if (!displayed) return;
+    const logicalWidth = Math.max(page.width, displayed);
+    const aspect = page.height / page.width;
+    // Bound backing buffers on mobile while CSS keeps the page at the requested zoom.
+    const ratio = Math.min(
+      window.devicePixelRatio || 1,
+      2,
+      Math.sqrt(8_000_000 / (logicalWidth * logicalWidth * aspect)),
+      4096 / (logicalWidth * Math.max(1, aspect)),
+    );
+    const width = Math.ceil(logicalWidth * ratio);
+    const height = Math.ceil(width * aspect);
+    if (canvas.width === width && canvas.height === height) {
+      redrawBase();
+      return;
+    }
+    redrawBase(false);
+    cancelAnimationFrame(runtime.current.frame);
+    runtime.current.frame = 0;
+    // Prepare ink before clearing the visible canvas, then publish it in the same frame.
+    canvas.width = width;
+    canvas.height = height;
+    paint();
   }
-  function redrawBase() {
+  function redrawBase(defer = true) {
+    runtime.current.vectorStrokes = null;
+    if (defer) schedule();
+  }
+  function paintInk() {
     const r = runtime.current,
-      base = r.base;
-    if (!base) return;
-    const ctx = base.getContext("2d")!;
-    ctx.clearRect(0, 0, base.width, base.height);
-    ctx.save();
-    ctx.scale(base.width / propsRef.current.page.width, base.height / propsRef.current.page.height);
-    if (!propsRef.current.transparent) drawPaper(ctx, propsRef.current.page);
-    const g = r.gesture;
-    for (const s of g?.mode === "erase" ? g.changed || r.strokes : r.strokes)
-      if (!(
-        (g?.mode === "move" || g?.mode === "resize" || g?.mode === "rotate") &&
-        r.selection.has(s.id)
-      ))
-        drawStroke(ctx, s);
-    ctx.restore();
-    schedule();
+      g = r.gesture,
+      group = inkRef.current,
+      live = liveInkRef.current;
+    if (!group || !live) return;
+    const strokes = g?.changed || r.strokes;
+    if (strokes !== r.vectorStrokes) {
+      const ids = new Set(strokes.map((s) => s.id));
+      for (const id of r.vectorPaths.keys()) if (!ids.has(id)) r.vectorPaths.delete(id);
+      group.replaceChildren(
+        ...strokes.map((stroke) => {
+          let path = r.vectorPaths.get(stroke.id);
+          if (!path) {
+            path = {
+              element: document.createElementNS("http://www.w3.org/2000/svg", "path"),
+              stroke,
+            };
+            r.vectorPaths.set(stroke.id, path);
+            path.element.setAttribute("d", strokePath(stroke));
+            path.element.setAttribute("fill", stroke.color);
+            path.element.setAttribute("opacity", stroke.tool === "highlighter" ? "0.3" : "1");
+          } else if (path.stroke !== stroke) {
+            path.stroke = stroke;
+            path.element.setAttribute("d", strokePath(stroke));
+            path.element.setAttribute("fill", stroke.color);
+          }
+          return path.element;
+        }),
+      );
+      r.vectorStrokes = strokes;
+    }
+    live.setAttribute("d", g?.stroke ? strokePath(g.stroke) : "");
+    if (g?.stroke) {
+      live.setAttribute("fill", g.stroke.color);
+      live.setAttribute("opacity", g.stroke.tool === "highlighter" ? "0.3" : "1");
+    }
   }
   function paint() {
     const canvas = canvasRef.current,
       r = runtime.current;
     r.frame = 0;
-    if (!canvas || !r.base) return;
+    if (!canvas) return;
+    paintInk();
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(r.base, 0, 0);
     ctx.save();
     ctx.scale(
       canvas.width / propsRef.current.page.width,
       canvas.height / propsRef.current.page.height,
     );
     const g = r.gesture;
-    if (g?.stroke) drawStroke(ctx, g.stroke);
-    if (g?.mode === "move" || g?.mode === "resize" || g?.mode === "rotate")
-      for (const s of g.changed || []) if (r.selection.has(s.id)) drawStroke(ctx, s);
     let rect = r.rect || bounds(r.strokes.filter((s) => r.selection.has(s.id)));
     if (g?.mode === "move" || g?.mode === "resize" || g?.mode === "rotate")
       rect = bounds((g.changed || g.original).filter((s) => r.selection.has(s.id)));
@@ -218,7 +276,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       );
     },
   }));
-  useEffect(() => {
+  useLayoutEffect(() => {
     const r = runtime.current;
     if (r.pageId !== props.page.id) {
       r.pageHistory.set(r.pageId, { history: r.history, future: r.future });
@@ -352,7 +410,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           id: crypto.randomUUID(),
           tool: p.tool === "highlighter" ? "highlighter" : "pen",
           color: p.color,
-          width: p.tool === "highlighter" ? Math.max(p.width * 5, 14) : p.width,
+          width: p.tool === "highlighter" ? 14 + ((p.width - 0.6) / 0.6) * 2 : p.width,
           points: [start],
         };
       if (mode === "erase") erase(start.x, start.y);
@@ -526,12 +584,65 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     };
   }, []);
   return (
-    <canvas
-      ref={canvasRef}
-      className={"ink-canvas ink-tool-" + props.tool}
-      tabIndex={0}
-      aria-label="Handwriting page. Choose an ink tool to write, or use Hand to move the page."
-      style={{ width: "100%", height: "100%", touchAction: "none" }}
-    />
+    <>
+      <svg
+        className="ink-vector"
+        viewBox={`0 0 ${props.page.width} ${props.page.height}`}
+        aria-hidden="true"
+      >
+        {!props.transparent && (
+          <>
+            <rect
+              width={props.page.width}
+              height={props.page.height}
+              fill={props.page.paper.color}
+            />
+            <path
+              d={paperLines}
+              fill="none"
+              stroke={props.page.paper.lineColor}
+              strokeWidth={0.65}
+            />
+            {props.page.paper.style === "dot" && (
+              <>
+                <defs>
+                  <pattern
+                    id={patternId}
+                    x={props.page.paper.spacing / 2}
+                    y={props.page.paper.spacing / 2}
+                    width={props.page.paper.spacing}
+                    height={props.page.paper.spacing}
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <circle
+                      cx={props.page.paper.spacing / 2}
+                      cy={props.page.paper.spacing / 2}
+                      r={1}
+                      fill={props.page.paper.lineColor}
+                    />
+                  </pattern>
+                </defs>
+                <rect
+                  x={props.page.paper.spacing - 1}
+                  y={props.page.paper.spacing - 1}
+                  width={props.page.width - props.page.paper.spacing + 1}
+                  height={props.page.height - props.page.paper.spacing + 1}
+                  fill={`url(#${patternId})`}
+                />
+              </>
+            )}
+          </>
+        )}
+        <g ref={inkRef} />
+        <path ref={liveInkRef} />
+      </svg>
+      <canvas
+        ref={canvasRef}
+        className={"ink-canvas ink-tool-" + props.tool}
+        tabIndex={0}
+        aria-label="Handwriting page. Choose an ink tool to write, or use Hand to move the page."
+        style={{ width: "100%", height: "100%", touchAction: "none" }}
+      />
+    </>
   );
 });

@@ -130,8 +130,9 @@ function createVaultStore(configPath) {
   }
   async function rename({ id, path: relative, nextPath, directory, expected }) {
     safePath(nextPath);
-    if (path.posix.dirname(relative) !== path.posix.dirname(nextPath))
-      throw new Error("Rename within the same folder.");
+    if (relative === nextPath) return;
+    if (directory && nextPath.startsWith(relative + "/"))
+      throw new Error("A folder cannot be moved inside itself.");
     const source = await target(id, relative),
       destination = await target(id, nextPath);
     const info = await fs.lstat(source);
@@ -139,12 +140,13 @@ function createVaultStore(configPath) {
       throw new Error("The vault item changed. Refresh the vault.");
     const originalName = path.basename(source),
       nextName = path.basename(destination);
-    if (originalName === nextName) return;
+    const sameParent = path.dirname(source) === path.dirname(destination);
     const entries = await fs.readdir(path.dirname(destination));
     if (
       entries.some(
         (name) =>
-          name !== originalName && name.toLocaleLowerCase() === nextName.toLocaleLowerCase(),
+          (!sameParent || name !== originalName) &&
+          name.toLocaleLowerCase() === nextName.toLocaleLowerCase(),
       )
     )
       throw new Error("A file or folder with that name already exists here.");

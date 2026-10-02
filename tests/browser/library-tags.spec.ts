@@ -24,6 +24,8 @@ async function fixture(page: Page) {
       { id: "math", name: "Math", parentId: "ideas" },
       { id: "hidden", name: ".private" },
       { id: "hidden-sub", name: "Private ideas", parentId: "hidden" },
+      { id: "windows-hidden", name: ".cache", path: ".cache" },
+      { id: "windows-child", name: "Archive", path: ".cache\\Archive", parentId: null },
     ])
       tx.objectStore("folders").put({ color: "#385775", ...folder });
     for (const [id, title, folderId, content] of [
@@ -31,6 +33,7 @@ async function fixture(page: Page) {
       ["related", "Other idea", "project", "# Other idea\n\nTagged #ideas."],
       ["secret", "Secret note", "hidden-sub", "# Secret"],
       ["dot-note", ".draft", null, "Hidden file"],
+      ["windows-secret", "Windows secret", "windows-child", "Hidden descendant"],
       ["home", "Home", null, "# Home\n\nStart here."],
     ])
       tx.objectStore("documents").put({
@@ -92,7 +95,7 @@ test("sidebar expands parents and library opens one level with breadcrumbs and r
   await page.getByRole("button", { name: "Save name", exact: true }).click();
   await expect(page.locator(".document-table .document-name")).toHaveText(["Project ideas"]);
   const note = (await documents(page)).find((doc) => doc.id === "ideas-note");
-  expect(note.content).toBe(content);
+  expect(note.content).toBe(content.replace("# Ideas — Map of Content", "# Project ideas"));
   await page.locator(".document-table .document-name").focus();
   await page.keyboard.press("Shift+F10");
   await expect(page.getByRole("menuitem", { name: "Version history", exact: true })).toBeVisible();
@@ -119,6 +122,8 @@ test("hidden files, folders and descendants stay hidden in navigation and search
   await page.keyboard.press("Control+k");
   await page.getByRole("combobox").fill("Secret note");
   await expect(page.getByRole("option")).toHaveCount(0);
+  await page.getByRole("combobox").fill("Windows secret");
+  await expect(page.getByRole("option")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Show hidden files", { exact: true }).check();
@@ -130,14 +135,19 @@ test("hidden files, folders and descendants stay hidden in navigation and search
   await page.keyboard.press("Control+k");
   await page.getByRole("combobox").fill("Secret note");
   await expect(page.getByRole("option")).toContainText("Secret note");
+  await page.getByRole("combobox").fill("Windows secret");
+  await expect(page.getByRole("option")).toContainText("Windows secret");
   await page.keyboard.press("Escape");
   await page.reload();
+  await expect(page.getByRole("heading", { name: "Your library", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByLabel("Show hidden files", { exact: true })).toBeChecked();
   await page.getByLabel("Show hidden files", { exact: true }).uncheck();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Control+k");
   await page.getByRole("combobox").fill("Secret note");
+  await expect(page.getByRole("option")).toHaveCount(0);
+  await page.getByRole("combobox").fill("Windows secret");
   await expect(page.getByRole("option")).toHaveCount(0);
   expect((await documents(page)).some((doc) => doc.id === "secret")).toBe(true);
 });
@@ -178,7 +188,7 @@ test("tags render as clickable metadata in both modes and previews show body con
   await page.getByRole("button", { name: "Reading", exact: true }).click();
   await expect(page.locator(".reading-prose h1")).toHaveCount(1);
   await page.getByRole("button", { name: "Show line numbers", exact: true }).click();
-  await expect(page.locator(".reading-block").first()).toHaveAttribute("data-source-line", "34");
+  await expect(page.locator(".reading-block").first()).toHaveAttribute("data-source-line", "36");
   await page.locator(".reading-prose .note-tags [data-tag=domain]").click();
   await expect(page.locator(".document-table .document-name")).toHaveText(["Ideas"]);
   await page.locator(".document-table .document-name").click();

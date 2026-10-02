@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
@@ -14,9 +14,10 @@ import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror
 import { autocompletion, completionKeymap, type CompletionContext } from "@codemirror/autocomplete";
 import { tags } from "@lezer/highlight";
 import { search, searchKeymap } from "@codemirror/search";
-import { livePreview } from "./live-preview";
+import { livePreview, fileTitle } from "./live-preview";
+import { FileTitle } from "./FileTitle";
+import { titleHeading, withoutTitleHeading } from "./metadata";
 import { renderMarkdown, localImageReferences } from "./render";
-import { frontmatter } from "./metadata";
 import { getAsset } from "../core/storage";
 import { vimBindings } from "./vim";
 import type { Preferences } from "../core/model";
@@ -43,6 +44,7 @@ interface Props {
   onLink(name: string): void;
   onTag(name: string): void;
   onProperties(): void;
+  onRename(value: string): Promise<void>;
 }
 export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
   function MarkdownEditor(props, ref) {
@@ -55,6 +57,7 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
     const compartment = useRef(new Compartment()),
       numberCompartment = useRef(new Compartment()),
       vimCompartment = useRef(new Compartment()),
+      titleCompartment = useRef(new Compartment()),
       vimExtension = useRef(vimBindings()),
       assetsRef = useRef(new Map<string, string>());
     const [assets, setAssets] = useState(new Map<string, string>());
@@ -62,6 +65,19 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
       !/Android|iPhone|iPad/i.test(navigator.userAgent),
     );
     const [readingCommand, setReadingCommand] = useState<string | null>(null);
+    const readingHtml = useMemo(
+      () => ({
+        __html:
+          props.mode === "reading"
+            ? renderMarkdown(
+                withoutTitleHeading(props.content),
+                assets,
+                props.preferences.lineNumbers,
+              )
+            : "",
+      }),
+      [props.mode, props.content, assets, props.preferences.lineNumbers],
+    );
     const pendingG = useRef(false);
     useEffect(() => {
       const detect = (event: KeyboardEvent) => {
@@ -173,12 +189,15 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
         setAssets(next);
         if (view.current && current.current.mode === "live")
           view.current.dispatch({
-            effects: compartment.current.reconfigure(
-              livePreview(
-                (name) => current.current.onLink(name),
-                () => assetsRef.current,
+            effects: [
+              view.current.scrollSnapshot(),
+              compartment.current.reconfigure(
+                livePreview(
+                  (name) => current.current.onLink(name),
+                  () => assetsRef.current,
+                ),
               ),
-            ),
+            ],
           });
       });
       return () => {
@@ -218,6 +237,13 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
           extensions: [
             vimCompartment.current.of([]),
             history(),
+            titleCompartment.current.of(
+              fileTitle(
+                () => current.current.title,
+                (value) => current.current.onRename(value),
+                current.current.mode === "source",
+              ),
+            ),
             markdown(),
             syntaxHighlighting(
               HighlightStyle.define([
@@ -286,6 +312,17 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
       if (v && v.state.doc.toString() !== props.content)
         v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.content } });
     }, [props.content]);
+    useEffect(() => {
+      view.current?.dispatch({
+        effects: titleCompartment.current.reconfigure(
+          fileTitle(
+            () => current.current.title,
+            (value) => current.current.onRename(value),
+            current.current.mode === "source",
+          ),
+        ),
+      });
+    }, [props.title, props.mode]);
     useEffect(() => {
       view.current?.dispatch({
         effects: [
@@ -412,14 +449,11 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
             }}
           >
             <article className="prose reading-prose">
-              {!/^#\s/.test((frontmatter(props.content)?.body ?? props.content).trimStart()) && (
-                <h1>{props.title}</h1>
-              )}
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdown(props.content, assets, props.preferences.lineNumbers),
-                }}
+              <FileTitle
+                title={titleHeading(props.content)?.title || props.title}
+                rename={props.onRename}
               />
+              <div dangerouslySetInnerHTML={readingHtml} />
             </article>
           </div>
         )}

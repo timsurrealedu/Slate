@@ -57,7 +57,7 @@ export function Notebook({
   const [index, setIndex] = useState(0),
     [tool, setTool] = useState<InkTool>("pen"),
     [color, setColor] = useState("#385775"),
-    [width, setWidth] = useState(2.2),
+    [width, setWidth] = useState(1.2),
     [zoom, setZoom] = useState(1),
     [thumbnails, setThumbnails] = useState(true);
   const [history, setHistory] = useState({ undo: false, redo: false, selection: false }),
@@ -95,7 +95,7 @@ export function Notebook({
     const wheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        setZoom((z) => Math.min(3, Math.max(0.5, z * Math.exp(-e.deltaY / 450))));
+        setZoom((z) => Math.min(5, Math.max(0.5, z * Math.exp(-e.deltaY / 450))));
       }
     };
     el.addEventListener("wheel", wheel, { passive: false });
@@ -115,7 +115,8 @@ export function Notebook({
       if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === "z") {
           e.preventDefault();
-          e.shiftKey ? ink.current?.redo() : ink.current?.undo();
+          if (e.shiftKey) ink.current?.redo();
+          else ink.current?.undo();
         }
         return;
       }
@@ -241,13 +242,21 @@ export function Notebook({
           </Floating>
         )}
         <div className="zoom-control">
-          <IconButton label="Zoom out" onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}>
+          <IconButton
+            label="Zoom out"
+            disabled={zoom <= 0.5}
+            onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
+          >
             <Minus size={14} />
           </IconButton>
           <button title="Fit page width" onClick={() => setZoom(1)}>
             {Math.round(zoom * 100)}%
           </button>
-          <IconButton label="Zoom in" onClick={() => setZoom((z) => Math.min(3, z + 0.1))}>
+          <IconButton
+            label="Zoom in"
+            disabled={zoom >= 5}
+            onClick={() => setZoom((z) => Math.min(5, z + 0.1))}
+          >
             <Plus size={14} />
           </IconButton>
         </div>
@@ -441,7 +450,7 @@ export function Notebook({
                     transparent={doc.kind === "pdf"}
                     onChange={(strokes) => updatePage({ strokes })}
                     onHistory={(undo, redo, selection) => setHistory({ undo, redo, selection })}
-                    onPinch={(factor) => setZoom((z) => Math.max(0.5, Math.min(3, z * factor)))}
+                    onPinch={(factor) => setZoom((z) => Math.max(0.5, Math.min(5, z * factor)))}
                   />
                   {doc.example && index === 0 && doc.kind !== "pdf" && (
                     <span className="example-page-label">Editable example</span>
@@ -547,10 +556,10 @@ export function Notebook({
         >
           <div className="width-picker">
             <h3>Pen thickness</h3>
-            {[1.2, 2.2, 3.8, 5.5].map((w) => (
+            {[0.6, 1.2, 1.8, 2.4].map((w) => (
               <button key={w} className={width === w ? "selected" : ""} onClick={() => setWidth(w)}>
                 <span style={{ height: w * 1.5 }} />
-                {w === 1.2 ? "Fine" : w === 2.2 ? "Medium" : w === 3.8 ? "Bold" : "Heavy"}
+                {w === 0.6 ? "Fine" : w === 1.2 ? "Medium" : w === 1.8 ? "Bold" : "Heavy"}
               </button>
             ))}
           </div>

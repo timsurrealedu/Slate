@@ -22,6 +22,57 @@ afterEach(async () => {
   await rm(temporary, { recursive: true, force: true });
 });
 
+it("reconciles external deletions without resurrecting cached folders or deleting note recovery data", async () => {
+  const root = join(temporary, "Vault");
+  for (const name of ["Personal", "Archive/Sub", "Attachments", ".private"])
+    await mkdir(join(root, name), { recursive: true });
+  await writeFile(join(root, "Archive/Sub/Lesson.md"), "Preserve my cached content");
+  await writeFile(join(root, "Personal/Keep.md"), "Keep");
+  const store = createVaultStore(join(temporary, "roots.json"));
+  vi.stubGlobal("window", { slateVault: store });
+  const connection = await store.authorize(root);
+  await workspace.openVault(connection, true);
+  const note = workspace.get().documents.find((doc) => doc.title === "Lesson")!;
+  const privateId = workspace.get().folders.find((folder) => folder.name === ".private")!.id;
+  await rm(join(root, "Archive"), { recursive: true });
+  await rm(join(root, "Attachments"), { recursive: true });
+  await workspace.openVault(connection, false);
+  expect(
+    workspace
+      .get()
+      .folders.map((folder) => folder.name)
+      .sort(),
+  ).toEqual([".private", "Personal"]);
+  expect(workspace.get().documents.map((doc) => doc.title)).toEqual(["Keep"]);
+  expect(
+    workspace.get().folders.find((folder) => folder.id === privateId)?.vaultMissing,
+  ).toBeFalsy();
+  expect((await storage.readWorkspace()).documents.find((doc) => doc.id === note.id)).toMatchObject(
+    { content: "Preserve my cached content", vaultMissing: true },
+  );
+  await workspace.load();
+  expect(
+    workspace
+      .get()
+      .folders.map((folder) => folder.name)
+      .sort(),
+  ).toEqual([".private", "Personal"]);
+  await mkdir(join(root, "Archive/Sub"), { recursive: true });
+  await writeFile(join(root, "Archive/Sub/Lesson.md"), "Returned from archive");
+  await workspace.openVault(connection);
+  expect(workspace.get().documents.find((doc) => doc.id === note.id)?.content).toBe(
+    "Returned from archive",
+  );
+  expect(workspace.get().folders.some((folder) => folder.name === "Archive")).toBe(true);
+  const before = workspace.get().folders;
+  const failedScan = vi
+    .spyOn(vault, "paths")
+    .mockRejectedValueOnce(new Error("Folder access failed"));
+  await expect(workspace.openVault(connection)).rejects.toThrow("Folder access failed");
+  expect(workspace.get().folders).toEqual(before);
+  failedScan.mockRestore();
+});
+
 it("renames nested vault items without losing bytes, identities, history or hidden assets", async () => {
   const root = join(temporary, "Vault");
   await mkdir(join(root, "Course", "Sub", ".private"), { recursive: true });
@@ -45,7 +96,8 @@ it("renames nested vault items without losing bytes, identities, history or hidd
   ]);
   workspace.update(note.id, { starred: true });
   await workspace.renameDocument(note.id, "Lesson");
-  expect(await readFile(join(root, "Course", "Sub", "Lesson.md"), "utf8")).toBe(text);
+  const renamed = text.replace("# Original", "# Lesson");
+  expect(await readFile(join(root, "Course", "Sub", "Lesson.md"), "utf8")).toBe(renamed);
   await expect(readFile(join(root, "Course", "Sub", "Untitled note.md"))).rejects.toThrow();
   const replacement = await workspace.create("note", sub.id);
   expect(replacement.id).not.toBe(note.id);
@@ -58,7 +110,7 @@ it("renames nested vault items without losing bytes, identities, history or hidd
   await workspace.openVault(connection);
   expect(workspace.get().documents.find((doc) => doc.id === note.id)).toMatchObject({
     title: "Lesson",
-    content: text,
+    content: renamed,
     starred: true,
     source: { path: "Studies/Sub/Lesson.md" },
   });
@@ -94,6 +146,88 @@ it("rejects rename collisions and external edits while leaving both originals in
   expect(await readFile(join(root, "A", "First.md"), "utf8")).toBe("External edit");
   expect(await readFile(join(root, "A", "Second.md"), "utf8")).toBe("Second");
 });
+
+it("moves vault files and entire folders physically while preserving identities and binary assets", async () => {
+  const root = join(temporary, "Vault");
+  await mkdir(join(root, "Course", "Sub", ".assets"), { recursive: true });
+  await mkdir(join(root, "Archive"));
+  await writeFile(join(root, "Course", "Sub", "Lesson.md"), "Original");
+  await writeFile(join(root, "Course", "Sub", ".assets", "scan.bin"), new Uint8Array([0, 255, 64]));
+  const store = createVaultStore(join(temporary, "roots.json"));
+  vi.stubGlobal("window", { slateVault: store });
+  const connection = await store.authorize(root);
+  await workspace.openVault(connection);
+  const { documents, folders } = workspace.get();
+  const note = documents[0],
+    course = folders.find((f) => f.path === "Course")!,
+    sub = folders.find((f) => f.path === "Course/Sub")!,
+    archive = folders.find((f) => f.path === "Archive")!;
+  await expect(workspace.moveFolder(course.id, sub.id)).rejects.toThrow("descendants");
+  await workspace.moveFolder(course.id, archive.id);
+  expect(await readFile(join(root, "Archive/Course/Sub/Lesson.md"), "utf8")).toBe("Original");
+  expect([...(await readFile(join(root, "Archive/Course/Sub/.assets/scan.bin")))]).toEqual([
+    0, 255, 64,
+  ]);
+  await workspace.moveDocument(note.id, null);
+  expect(await readFile(join(root, "Lesson.md"), "utf8")).toBe("Original");
+  await expect(readFile(join(root, "Archive/Course/Sub/Lesson.md"))).rejects.toThrow();
+  await workspace.openVault(connection);
+  expect(workspace.get().documents.find((doc) => doc.id === note.id)?.source?.path).toBe(
+    "Lesson.md",
+  );
+  expect(workspace.get().folders.find((f) => f.id === sub.id)?.path).toBe("Archive/Course/Sub");
+  workspace.update(note.id, { content: "Written after move" });
+  await workspace.flush();
+  expect(await readFile(join(root, "Lesson.md"), "utf8")).toBe("Written after move");
+  await writeFile(join(root, "Archive", "Lesson.md"), "Destination original");
+  await expect(workspace.moveDocument(note.id, archive.id)).rejects.toThrow("already exists");
+  expect(await readFile(join(root, "Lesson.md"), "utf8")).toBe("Written after move");
+  expect(await readFile(join(root, "Archive/Lesson.md"), "utf8")).toBe("Destination original");
+});
+
+it.each(["move", "rename"])(
+  "retains edits made during a vault %s and never recreates the old file",
+  async (action) => {
+    const root = join(temporary, "Vault");
+    await mkdir(join(root, "Archive"), { recursive: true });
+    await writeFile(join(root, "Lesson.md"), "# Original\n\nOriginal body");
+    const store = createVaultStore(join(temporary, "roots.json"));
+    vi.stubGlobal("window", { slateVault: store });
+    await workspace.openVault(await store.authorize(root));
+    const note = workspace.get().documents[0],
+      folder = workspace.get().folders[0];
+    const rename = vault.rename.bind(vault);
+    let release!: () => void, started!: () => void;
+    const beginning = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = vi.spyOn(vault, "rename").mockImplementation(async (...args) => {
+      started();
+      await barrier;
+      await rename(...args);
+    });
+    try {
+      const moving =
+        action === "move"
+          ? workspace.moveDocument(note.id, folder.id)
+          : workspace.renameDocument(note.id, "Lecture");
+      await beginning;
+      workspace.update(note.id, { content: "# Edited heading\n\nTyped during move" });
+      release();
+      await moving;
+      expect(
+        await readFile(join(root, action === "move" ? "Archive/Lesson.md" : "Lecture.md"), "utf8"),
+      ).toBe("# Edited heading\n\nTyped during move");
+      await expect(readFile(join(root, "Lesson.md"))).rejects.toThrow();
+      expect(workspace.get().documents[0].content).toBe("# Edited heading\n\nTyped during move");
+    } finally {
+      spy.mockRestore();
+    }
+  },
+);
 
 it("can reveal dot-prefixed vault files without deleting them when hidden again", async () => {
   const root = join(temporary, "Vault");

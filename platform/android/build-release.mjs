@@ -3,9 +3,8 @@ import { createDecipheriv, scryptSync } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { buildApk } from "./build-apk.mjs";
 const directory = dirname(fileURLToPath(import.meta.url));
-const appDirectory = resolve(directory, "../..");
 const argument = process.argv.indexOf("--password-file");
 if (argument < 0 || !process.argv[argument + 1])
   throw new Error("Provide --password-file pointing to the private signing recovery password.");
@@ -36,20 +35,15 @@ const temporary = mkdtempSync(join(tmpdir(), "slate-signing-"));
 try {
   const path = join(temporary, "slate-release.keystore");
   writeFileSync(path, keystore, { mode: 0o600 });
-  const windows = process.platform === "win32";
-  const result = spawnSync(
-    windows ? "gradlew.bat" : "./gradlew",
-    ["--no-daemon", "--max-workers=2", "assembleRelease"],
+  buildApk(
+    "release",
     {
-      cwd: join(appDirectory, "android"),
-      env: { ...process.env, SLATE_ANDROID_KEYSTORE: path, SLATE_ANDROID_KEY_PASSWORD: password },
-      stdio: "inherit",
-      shell: windows,
+      ...process.env,
+      SLATE_ANDROID_KEYSTORE: path,
+      SLATE_ANDROID_KEY_PASSWORD: password,
     },
+    envelope.certificateSha256,
   );
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error("Android release compilation failed.");
-  console.log("Signed APK: android/app/build/outputs/apk/release/app-release.apk");
 } finally {
   keystore.fill(0);
   key.fill(0);

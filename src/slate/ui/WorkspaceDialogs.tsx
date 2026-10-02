@@ -174,6 +174,11 @@ export function MoveDialog({
   folders: SlateFolder[];
   onClose(): void;
 }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setError("");
+  }, [doc?.id]);
   return (
     <Modal
       open={!!doc}
@@ -184,14 +189,29 @@ export function MoveDialog({
       description={doc ? doc.title : ""}
       className="small-modal"
     >
+      {error && (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="move-folder-list">
         {[{ id: "", name: "Unfiled", color: "#788496" }, ...folders].map((f) => (
           <button
             className={doc?.folderId === (f.id || null) ? "selected" : ""}
             key={f.id}
-            onClick={() => {
-              if (doc) workspace.update(doc.id, { folderId: f.id || null });
-              onClose();
+            disabled={busy}
+            onClick={async () => {
+              if (!doc) return;
+              setBusy(true);
+              setError("");
+              try {
+                await workspace.moveDocument(doc.id, f.id || null);
+                onClose();
+              } catch (error) {
+                setError(error instanceof Error ? error.message : "Could not move this file.");
+              } finally {
+                setBusy(false);
+              }
             }}
           >
             <Folder size={19} style={{ color: f.color }} />

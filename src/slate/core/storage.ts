@@ -280,6 +280,7 @@ const manifestSchema = z.object({
         name: z.string().max(1000),
         color: z.string().regex(/^#[0-9a-f]{6}$/i),
         parentId: z.string().max(200).nullable().optional(),
+        trashedAt: z.number().nullable().optional(),
       }),
     )
     .max(10000),
@@ -302,6 +303,7 @@ const manifestSchema = z.object({
     lineNumbers: z.boolean().default(false),
     vim: z.boolean().default(false),
     showHiddenFiles: z.boolean().default(false),
+    sidebarWidth: z.number().min(180).max(480).default(228),
     editorWidth: z.number().min(360).max(1600).default(850),
     editorMarginLeft: z.number().min(0).max(200).default(50),
     editorMarginRight: z.number().min(0).max(200).default(50),

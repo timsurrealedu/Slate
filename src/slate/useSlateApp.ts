@@ -24,6 +24,7 @@ export function useSlateApp() {
     [dark, setDark] = useState(false),
     [search, setSearch] = useState(false),
     [settings, setSettings] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const [toast, setToast] = useState<{
       message: string;
       undo?: () => void;
@@ -51,7 +52,10 @@ export function useSlateApp() {
     if (!data.ready) return;
     if (active && !data.documents.some((doc) => doc.id === active && !doc.trashedAt))
       goLibrary("library");
-    if (view.startsWith("folder:") && !data.folders.some((folder) => folder.id === view.slice(7)))
+    if (
+      view.startsWith("folder:") &&
+      !data.folders.some((folder) => folder.id === view.slice(7) && !folder.trashedAt)
+    )
       goLibrary("library");
   }, [data.ready, data.documents, data.folders, active, view]);
   nativeBack.current = () => {
@@ -105,6 +109,14 @@ export function useSlateApp() {
     if (!editorRefs.current.has(id)) editorRefs.current.set(id, createRef<MarkdownHandle>());
     return editorRefs.current.get(id)!;
   }
+  function reorderTab(id: string, index: number) {
+    setTabs((current) => {
+      if (!current.includes(id)) return current;
+      const next = current.filter((tab) => tab !== id);
+      next.splice(Math.max(0, Math.min(index, next.length)), 0, id);
+      return next;
+    });
+  }
   useEffect(() => {
     const narrow = matchMedia("(max-width: 960px)"),
       contextWidth = matchMedia("(min-width: 1181px)");
@@ -117,7 +129,19 @@ export function useSlateApp() {
     };
     resize();
     narrow.addEventListener("change", resize);
-    workspace.load().then(() => {
+    workspace.load().then(async () => {
+      const connection = workspace.get().vault;
+      if (connection) {
+        try {
+          await workspace.openVault(connection);
+        } catch (error) {
+          notify(
+            error instanceof Error ? error.message : "Could not refresh the vault.",
+            undefined,
+            true,
+          );
+        }
+      }
       try {
         const session = JSON.parse(localStorage.getItem("slate-session") || "{}");
         const docs = workspace.get().documents;
@@ -134,7 +158,10 @@ export function useSlateApp() {
         );
         if (hash && !restored.includes(hash) && docs.some((d) => d.id === hash && !d.trashedAt))
           setTabs([...restored, hash]);
-      } catch {}
+      } catch {
+        // Session storage is optional; notes remain in IndexedDB.
+      }
+      setSessionReady(true);
     });
     const protect = (e: BeforeUnloadEvent) => {
       if (workspace.get().saving) {
@@ -176,12 +203,19 @@ export function useSlateApp() {
     };
   }, []);
   useEffect(() => {
-    if (data.ready) {
+    if (data.ready && sessionReady) {
+      history.replaceState(
+        null,
+        "",
+        active ? "#doc=" + active : location.pathname + location.search,
+      );
       try {
         localStorage.setItem("slate-session", JSON.stringify({ tabs, active }));
-      } catch {}
+      } catch {
+        // Keep the workspace usable when session storage is unavailable.
+      }
     }
-  }, [tabs, active, data.ready]);
+  }, [tabs, active, data.ready, sessionReady]);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
@@ -200,13 +234,19 @@ export function useSlateApp() {
     setTabs((current) => (current.includes(doc.id) ? current : [...current, doc.id]));
     setActive(doc.id);
     workspace.update(doc.id, { openedAt: Date.now() });
-    if (compact) setSidebar(false);
+    if (compact) {
+      setSidebar(false);
+      setContext(false);
+    }
     history.replaceState(null, "", "#doc=" + doc.id);
   }
   function goLibrary(next = view) {
     setView(next);
     setActive(null);
-    if (compact) setSidebar(false);
+    if (compact) {
+      setSidebar(false);
+      setContext(false);
+    }
     history.replaceState(null, "", location.pathname);
   }
   function closeTab(id: string) {
@@ -219,28 +259,48 @@ export function useSlateApp() {
       history.replaceState(null, "", nextId ? "#doc=" + nextId : location.pathname);
     }
   }
-  async function create(kind: DocumentKind = "note") {
+  async function create(
+    kind: DocumentKind = "note",
+    folderId: string | null = view.startsWith("folder:") ? view.slice(7) : null,
+  ) {
     try {
-      const doc = await workspace.create(kind, view.startsWith("folder:") ? view.slice(7) : null);
-      if (kind === "note") workspace.update(doc.id, { content: "# " + doc.title + "\n\n" });
+      const doc = await workspace.create(kind, folderId);
       open(doc);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Could not create this document.", undefined, true);
     }
   }
   async function openLink(name: string) {
-    const [title, anchor] = name.split("#");
-    let doc = data.documents.find(
-      (d) =>
-        !d.trashedAt &&
-        (d.title.toLowerCase() === title.trim().toLowerCase() ||
-          d.source?.path.replace(/\.[^.]+$/, "").toLowerCase() === title.trim().toLowerCase()),
-    );
+    try {
+      name = decodeURIComponent(name);
+    } catch {
+      /* Keep literal malformed escapes. */
+    }
+    const [rawTitle, anchor] = name.split("#");
+    const title = rawTitle.trim().replace(/\.md$/i, "");
+    const parent = selected?.source?.path.split("/").slice(0, -1) || [];
+    const relative: string[] = [];
+    for (const part of [...parent, ...title.split("/")]) {
+      if (part === "..") relative.pop();
+      else if (part && part !== ".") relative.push(part);
+    }
+    let doc =
+      !title && anchor
+        ? selected
+        : data.documents.find(
+            (d) =>
+              !d.trashedAt &&
+              (d.title.toLowerCase() === title.trim().toLowerCase() ||
+                [title, relative.join("/")].some(
+                  (path) =>
+                    d.source?.path.replace(/\.[^.]+$/, "").toLowerCase() === path.toLowerCase(),
+                )),
+          );
     if (!doc) {
       try {
         doc = await workspace.create("note", selected?.folderId || null);
-        workspace.update(doc.id, { title: title.trim(), content: "# " + title.trim() + "\n\n" });
-        doc = { ...doc, title: title.trim(), content: "# " + title.trim() + "\n\n" };
+        await workspace.renameDocument(doc.id, title.trim());
+        doc = workspace.get().documents.find((item) => item.id === doc!.id)!;
         notify("Created “" + title.trim() + "”");
       } catch (e) {
         notify(
@@ -330,7 +390,7 @@ export function useSlateApp() {
       const id = newId();
       await putAsset(id, file);
       getEditor(selected.id).current?.insert(
-        "![" + file.name.replace(/[\[\]()]/g, "") + "](attachment:" + id + ")",
+        "![" + file.name.replace(/[()[\]]/g, "") + "](attachment:" + id + ")",
       );
     } catch (e) {
       notify(e instanceof Error ? e.message : "Could not import the image.", undefined, true);
@@ -431,6 +491,7 @@ export function useSlateApp() {
     active,
     setActive,
     tabs,
+    reorderTab,
     view,
     sidebar,
     setSidebar,

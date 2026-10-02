@@ -69,7 +69,7 @@ test("Creation has two choices; line numbers, dark gutters and column layout are
       }),
     ).toEqual(["600px", "24px", "72px"]);
     if (mode === "Reading")
-      await expect(page.locator(".reading-block").first()).toHaveAttribute("data-line-number", "1");
+      await expect(page.locator(".reading-block").first()).toHaveAttribute("data-line-number", "3");
     else await expect(page.locator(".cm-lineNumbers:visible")).toBeVisible();
   }
   await page.getByRole("button", { name: "Show line numbers", exact: true }).click();
@@ -136,8 +136,6 @@ test("Visual tables update cells and equations compose offline without raw LaTeX
   await page.getByRole("button", { name: "Insert table", exact: true }).click();
   await expect.poll(async () => (await latest(page))?.content).toContain("| Mass | 5 |");
   await page.getByRole("button", { name: "Live preview", exact: true }).click();
-  await page.locator(".cm-content:visible").click();
-  await page.keyboard.press("Control+Home");
   await page.locator(".live-block table").getByRole("cell", { name: "5", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Edit table", exact: true })).toBeVisible();
   await page.getByLabel("Row 2, column 2", { exact: true }).fill("10");

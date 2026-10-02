@@ -10,7 +10,10 @@ const errors = [];
 let instance;
 async function launch() {
   instance = await _electron.launch({
-    executablePath: process.platform === "win32" ? "artifacts/desktop/Slate-win32-x64/Slate.exe" : "artifacts/desktop/Slate-linux-x64/Slate",
+    executablePath:
+      process.platform === "win32"
+        ? "artifacts/desktop/Slate-win32-x64/Slate.exe"
+        : "artifacts/desktop/Slate-linux-x64/Slate",
     args:
       process.env.SLATE_CI_NO_SANDBOX === "1" ? ["--no-sandbox", "--disable-dev-shm-usage"] : [],
     env: { ...process.env, SLATE_TEST_USER_DATA: profile, SLATE_TEST_HIDE_WINDOW: "1" },
@@ -29,25 +32,63 @@ async function closeNormally() {
 }
 try {
   let page = await launch();
+  await expect(page.locator(".workspace-topbar")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import documents", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Vault options", exact: true }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("menuitem", { name: "Import documents", exact: true }).click();
+  await (
+    await chooser
+  ).setFiles({
+    name: "Desktop import.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Desktop import\n\nKeep the imported body.\n"),
+  });
+  await expect(page.getByLabel("File title", { exact: true })).toHaveValue("Desktop import");
+  await expect(page.locator(".editor-mount:visible h1")).toHaveCount(1);
+  await page.getByLabel("File title", { exact: true }).fill("Desktop heading");
+  await page.getByLabel("File title", { exact: true }).press("Enter");
+  await expect.poll(async () => (await latest(page))?.title).toBe("Desktop heading");
+  expect((await latest(page)).content).toBe("# Desktop heading\n\nKeep the imported body.\n");
+  const importedId = (await latest(page)).id;
   await page.keyboard.press("Control+n");
+  await expect.poll(async () => (await latest(page))?.id).not.toBe(importedId);
+  await expect(page.getByLabel("Document title", { exact: true })).toHaveValue(
+    (await latest(page)).title,
+  );
   await page.getByLabel("Document title", { exact: true }).fill("Native persistence");
-  await page.getByRole("button", { name: "Source", exact: true }).click();
-  await page.getByRole("textbox", { name: "Markdown editor", exact: true }).click();
+  await page.getByLabel("Document title", { exact: true }).press("Enter");
+  await expect.poll(async () => (await latest(page))?.title).toBe("Native persistence");
+  // Commit the hidden native window's new tab layout before pointer actions.
+  await page.screenshot({ path: "artifacts/desktop-native-heading.png" });
+  const pane = page.locator(".document-pane:not([hidden])");
+  await pane.getByRole("button", { name: "Source", exact: true }).click();
+  await pane.getByRole("textbox", { name: "Markdown editor", exact: true }).click();
   await page.keyboard.press("Control+A");
   const text = "# Native persistence\n\nSaved before the window closes.\n";
   await page.keyboard.insertText(text);
   // Close immediately after editing, then relaunch into the same isolated native profile.
   await closeNormally();
   page = await launch();
-  await page.getByRole("button", { name: "Open Native persistence", exact: true }).click();
   await expect(page.getByLabel("Document title", { exact: true })).toHaveValue(
     "Native persistence",
   );
+  await expect(page).toHaveURL(/#doc=.+$/);
   expect((await latest(page)).content).toBe(text);
   await page.keyboard.press("Control+Shift+n");
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
+  await page.getByRole("button", { name: "Pen thickness", exact: true }).click();
+  await page.getByRole("button", { name: "Fine", exact: true }).click();
+  await page.keyboard.press("Escape");
   await draw(page);
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);
+  expect((await latest(page)).pages[0].strokes[0].width).toBe(0.6);
+  await page
+    .locator(".page-viewport:visible")
+    .dispatchEvent("wheel", { ctrlKey: true, deltaY: -4000 });
+  await expect(page.locator(".zoom-control")).toContainText("500%");
+  await expect(page.getByRole("button", { name: "Zoom in", exact: true })).toBeDisabled();
+  await page.getByTitle("Fit page width", { exact: true }).click();
   await instance.evaluate(({ session }, file) => {
     session.defaultSession.on("will-download", (_event, item) => item.setSavePath(file));
   }, backup);
@@ -65,7 +106,7 @@ try {
     .toBe(true);
   const files = unzipSync(readFileSync(backup));
   const manifest = JSON.parse(strFromU8(files["manifest.json"]));
-  expect(manifest.documents.length).toBe(8);
+  expect(manifest.documents.length).toBe(9);
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.screenshot({ path: "artifacts/desktop-native.png" });
   await page.evaluate(() => navigator.serviceWorker.ready);
@@ -106,6 +147,9 @@ try {
     JSON.stringify(
       {
         launch: "pass",
+        vaultMenuImport: "pass",
+        unifiedHeading: "pass",
+        zoom500AndFinePen: "pass",
         immediateCloseSave: "pass",
         relaunch: "pass",
         ink: "pass",

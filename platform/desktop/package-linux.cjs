@@ -1,9 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { version } = require("../../package.json");
 const stage = path.resolve("artifacts/linux-deb-stage");
 const source = path.resolve("artifacts/desktop/Slate-linux-x64");
-const output = path.resolve("artifacts/slate-0.1.0-linux-amd64.deb");
+const output = path.resolve(`artifacts/slate-${version}-linux-amd64.deb`);
 if (!fs.existsSync(path.join(source, "Slate")))
   throw new Error("Build the Linux desktop package before assembling its installer.");
 fs.rmSync(stage, { recursive: true, force: true });
@@ -17,7 +18,7 @@ fs.writeFileSync(
   path.join(control, "control"),
   [
     "Package: slate",
-    "Version: 0.1.0",
+    `Version: ${version}`,
     "Architecture: amd64",
     "Maintainer: Slate",
     "Section: education",

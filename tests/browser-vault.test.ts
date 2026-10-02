@@ -96,6 +96,18 @@ it("browser rename verifies nested binary and hidden entries before removing ori
   );
 });
 
+it("browser folder moves verify hidden binary files across different parents", async () => {
+  const original = await root.getDirectoryHandle("Course", { create: true });
+  const target = await root.getDirectoryHandle("Archive", { create: true });
+  const hidden = await original.getDirectoryHandle(".assets", { create: true });
+  const file = await hidden.getFileHandle("scan.bin", { create: true });
+  file.bytes = new Uint8Array([0, 128, 255]);
+  await vault.rename("Course", "Archive/Course", true);
+  expect(root.entries.has("Course")).toBe(false);
+  const moved = await (await target.getDirectoryHandle("Course")).getDirectoryHandle(".assets");
+  expect([...(await moved.getFileHandle("scan.bin")).bytes]).toEqual([0, 128, 255]);
+});
+
 it("browser rename aborts without removing original files when another file arrives during copying", async () => {
   const original = await root.getDirectoryHandle("Course", { create: true });
   const note = await original.getFileHandle("Note.md", { create: true });

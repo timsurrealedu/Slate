@@ -42,12 +42,50 @@ export function metadataTags(properties: Record<string, unknown>) {
   ];
 }
 
-export const inlineTag = /(?<![\p{L}\p{N}_/#])#([\p{L}\p{N}_\/-]*[\p{L}_][\p{L}\p{N}_\/-]*)/gu;
+export function titleHeading(source: string) {
+  const offset = frontmatter(source)?.raw.length || (source.startsWith("\uFEFF") ? 1 : 0);
+  const body = source.slice(offset);
+  const blanks = /^(?:[ \t]*\r?\n)*/.exec(body)![0].length;
+  const from = offset + blanks;
+  const text = source.slice(from);
+  const atx = /^( {0,3}#[ \t]+)([^\r\n]*?)(?:[ \t]+#+[ \t]*)?(?=\r?\n|$)/.exec(text);
+  const setext = !atx && /^( {0,3})([^\r\n]+)\r?\n {0,3}=+[ \t]*(?=\r?\n|$)/.exec(text);
+  const match = atx || setext;
+  if (!match) return null;
+  return {
+    from,
+    to: from + match[0].length,
+    textFrom: from + match[1].length,
+    textTo: from + match[1].length + match[2].length,
+    title: match[2].trim(),
+  };
+}
+
+export function renameHeading(source: string, title: string) {
+  const heading = titleHeading(source);
+  return heading
+    ? source.slice(0, heading.textFrom) + title + source.slice(heading.textTo)
+    : source;
+}
+
+export function withoutTitleHeading(source: string) {
+  const heading = titleHeading(source);
+  return heading
+    ? source.slice(0, heading.from) +
+        source.slice(heading.from, heading.to).replace(/[^\r\n]/g, "") +
+        source.slice(heading.to)
+    : source;
+}
+
+export const inlineTag =
+  /(?<![\p{L}\p{M}\p{N}_/#\\])#((?=[\p{L}\p{M}\p{N}\p{Extended_Pictographic}_/\-\p{Join_Control}]*[\p{L}\p{M}\p{Extended_Pictographic}_/\-\p{Join_Control}])[\p{L}\p{M}\p{N}\p{Extended_Pictographic}_/\-\p{Join_Control}]+)/gu;
 export function documentTags(doc: SlateDocument) {
   const metadata = frontmatter(doc.content);
   const body = (metadata?.body ?? doc.content)
+    .replace(/%%[\s\S]*?%%|<!--[\s\S]*?-->/g, "")
     .replace(/(^|\n)(\x60{3,}|~{3,})[^\n]*\n[\s\S]*?\n\2[^\n]*/g, "\n")
-    .replace(/\x60[^\x60]*\x60/g, "")
+    .replace(/(\x60+)[\s\S]*?\1/g, "")
+    .replace(/\\#[^\s]+|<[^>]*>/g, "")
     .replace(/!?\[[^\]]*\]\([^)]*\)|\[\[[^\]]*\]\]|https?:\/\/\S+/g, "");
   return [
     ...new Set([

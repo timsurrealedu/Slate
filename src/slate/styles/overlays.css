@@ -222,6 +222,7 @@
   padding: 27px 27px 0;
 }
 .settings-scroll {
+  position: relative;
   max-height: calc(100dvh - 235px);
   overflow: auto;
   margin: 0 -8px;
@@ -380,10 +381,13 @@
   border-radius: 0 0 12px 12px;
 }
 .navigation-modal {
-  top: 0;
-  left: 0;
+  top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   transform: none;
-  height: 100dvh;
+  height: calc(
+    100dvh - var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) -
+      var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
+  );
   max-height: none;
   width: 265px;
   max-width: 85vw;
@@ -391,6 +395,7 @@
   border-radius: 0;
   background: var(--sidebar);
   overflow: hidden;
+  animation: drawer-enter var(--motion);
 }
 .navigation-modal > .modal-heading {
   display: none;
@@ -403,6 +408,192 @@
 }
 .navigation-modal .brand {
   padding-bottom: 25px;
+}
+.mobile-drawer.modal-content {
+  top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  height: calc(
+    100dvh - var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) -
+      var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
+  );
+  max-height: none;
+  max-width: 85vw;
+  padding: 0;
+  border-radius: 0;
+  overflow: hidden;
+  transform: translateX(0);
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+.drawer-left {
+  animation: drawer-left-enter 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.drawer-right.modal-content {
+  left: auto;
+  right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  width: 300px;
+  animation: drawer-right-enter 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.context-modal .context-panel {
+  position: static;
+  width: 100%;
+  height: 100%;
+  box-shadow: none;
+}
+.drawer-overlay {
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mobile-drawer[data-swipe="true"],
+.drawer-overlay[data-swipe="true"] {
+  animation: none;
+}
+.mobile-drawer[data-dragging="true"],
+.drawer-overlay[data-dragging="true"] {
+  transition: none;
+  animation: none;
+}
+.drawer-left[data-dragging="true"] {
+  transform: translateX(calc((var(--drawer-progress, 0) - 1) * 100%));
+}
+.drawer-right[data-dragging="true"] {
+  transform: translateX(calc((1 - var(--drawer-progress, 0)) * 100%));
+}
+.drawer-overlay[data-dragging="true"] {
+  opacity: var(--drawer-progress, 0);
+}
+.mobile-drawer[data-state="closed"],
+.drawer-overlay[data-state="closed"] {
+  animation: drawer-presence 240ms;
+}
+.drawer-left[data-state="closed"] {
+  transform: translateX(-100%);
+}
+.drawer-right[data-state="closed"] {
+  transform: translateX(100%);
+}
+.drawer-overlay[data-state="closed"] {
+  opacity: 0;
+}
+@keyframes drawer-left-enter {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes drawer-right-enter {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes drawer-presence {
+  from {
+    outline-color: transparent;
+  }
+  to {
+    outline-color: transparent;
+  }
+}
+@media (max-width: 960px) {
+  .settings-modal.modal-content {
+    display: flex;
+    flex-direction: column;
+    height: min(
+      760px,
+      calc(
+        100dvh - var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) -
+          var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) - 24px
+      )
+    );
+    width: min(
+      500px,
+      calc(
+        100vw - var(--safe-area-inset-left, env(safe-area-inset-left, 0px)) -
+          var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) - 24px
+      )
+    );
+    max-height: calc(
+      100dvh - var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) -
+        var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) - 24px
+    );
+    padding: 20px 16px 0;
+    overflow: hidden;
+  }
+  .settings-modal > .modal-heading,
+  .settings-modal > .modal-description {
+    flex-shrink: 0;
+  }
+  .settings-modal .modal-description {
+    margin-bottom: 20px;
+  }
+  .settings-scroll {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    margin: 0 -4px;
+    padding: 0 4px 4px;
+    overscroll-behavior: contain;
+  }
+  .settings-scroll > section {
+    padding: 20px 0;
+  }
+  .settings-scroll h3 {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .settings-field {
+    min-height: 44px;
+    margin-top: 16px;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .settings-field > span {
+    min-width: 0;
+    gap: 8px;
+  }
+  .settings-field:has(.workspace-name-input) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .settings-field .workspace-name-input {
+    width: 100%;
+    max-width: none;
+    font-size: 16px;
+  }
+  .settings-field input[type="range"] {
+    width: 104px;
+    min-height: 44px;
+  }
+  .settings-field > input[type="checkbox"] {
+    width: 20px;
+    min-height: 20px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .theme-options {
+    gap: 8px;
+  }
+  .theme-options > button {
+    min-height: 64px;
+    font-size: 12px;
+  }
+  .backup-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .backup-actions > button {
+    min-height: 44px;
+  }
+  .settings-footer {
+    margin: 0 -16px;
+    padding: 12px 16px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
 }
 .small-modal {
   width: min(390px, calc(100vw - 32px));
@@ -508,6 +699,16 @@
   width: 26px;
   height: 26px;
 }
+@keyframes drawer-enter {
+  from {
+    opacity: 0.6;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @keyframes surface-enter {
   from {
     opacity: 0.6;
@@ -549,23 +750,6 @@
     width: 265px;
     padding: 0;
     max-height: none;
-  }
-  .settings-modal {
-    padding: 22px 22px 0;
-  }
-  .settings-footer {
-    margin: 0 -22px;
-    padding: 14px 22px;
-  }
-  .settings-field {
-    font-size: 11px;
-    gap: 12px;
-  }
-  .settings-field > input {
-    width: 180px;
-  }
-  .settings-field input[type="range"] {
-    width: 90px;
   }
   .command-modal {
     top: 10%;
