@@ -1,55 +1,61 @@
-# Logs
-logs
+# Local backups, legacy research and completed deliveries
+/.local/
+/releases/
+
+# Dependencies and generated application output
+node_modules/
+dist/
+dist-ssr/
+.output/
+.vinxi/
+.tanstack/
+.nitro/
+.wrangler/
+artifacts/
+coverage/
+playwright-report/
+test-results/
+**/__pycache__/
+**/.kotlin/
+
+# Local credentials and machine configuration
+.env
+.env.*
+!.env.example
+.dev.vars
+*.local
+*.keystore
+*.jks
+*.password
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Tool caches (retain the design specification and review records)
+.impeccable/hook.cache.json
+.impeccable/cache/
+.impeccable/**/*.png
+.graphify/
+graphify-out/cache/
+graphify-out/.graphify_*
+graphify-out/.needs_update
+
+# Logs and editor state
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-.output
-.vinxi
-.tanstack/**
-.nitro
-*.local
-
-# Wrangler / Cloudflare
-.wrangler/
-.dev.vars
-
-# Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-# Browser verification artifacts
-artifacts/
-playwright-report/
-test-results/
-
-# Private signing material
-*.keystore
-*.jks
-*.password
-
-# Local workspace archives and completed packages
-/.local/
-/releases/
-# Environment, signing and tool caches
-.env
-.env.*
-!.env.example
-**/.kotlin/
-**/__pycache__/
-.impeccable/hook.cache.json
-.impeccable/cache/
-.impeccable/**/*.png

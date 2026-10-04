@@ -1,0 +1,18 @@
+# Index the maintained application, native platforms, tests and docs.
+# Shared template packages and their examples remain in the source tree.
+/packages/
+/migrations/
+/src/components/
+/src/layouts/
+/src/module/
+/src/routes/api/
+/src/lib/fnf*
+/src/assets/
+/public/pdf-assets/
+/public/mathlive-fonts/
+/public/presets/
+/public/assets/
+/public/icons/
+/android/app/src/main/res/
+/platform/android/*.enc.json
+/.impeccable/hook.cache.json

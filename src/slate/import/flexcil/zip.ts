@@ -56,7 +56,8 @@ export class SeekableZipArchive {
         throw new FlexcilImportError("invalid_zip", `Invalid central directory entry ${index}`);
       }
       const flags = u16(bytes, cursor + 8);
-      if ((flags & 1) !== 0) throw new FlexcilImportError("encrypted_zip", "Encrypted ZIP entries are unsupported");
+      if ((flags & 1) !== 0)
+        throw new FlexcilImportError("encrypted_zip", "Encrypted ZIP entries are unsupported");
       const method = u16(bytes, cursor + 10);
       const crc32 = u32(bytes, cursor + 16);
       let compressedSize = u32(bytes, cursor + 20);
@@ -66,12 +67,20 @@ export class SeekableZipArchive {
       const commentLength = u16(bytes, cursor + 32);
       let localHeaderOffset = u32(bytes, cursor + 42);
       const end = cursor + 46 + nameLength + extraLength + commentLength;
-      if (end > bytes.length) throw new FlexcilImportError("invalid_zip", "Truncated central directory entry");
+      if (end > bytes.length)
+        throw new FlexcilImportError("invalid_zip", "Truncated central directory entry");
       const nameBytes = bytes.subarray(cursor + 46, cursor + 46 + nameLength);
       const decodedName = decodeName(nameBytes, flags);
       const name = validateEntryPath(decodedName);
-      const extra = bytes.subarray(cursor + 46 + nameLength, cursor + 46 + nameLength + extraLength);
-      if (size === 0xffffffff || compressedSize === 0xffffffff || localHeaderOffset === 0xffffffff) {
+      const extra = bytes.subarray(
+        cursor + 46 + nameLength,
+        cursor + 46 + nameLength + extraLength,
+      );
+      if (
+        size === 0xffffffff ||
+        compressedSize === 0xffffffff ||
+        localHeaderOffset === 0xffffffff
+      ) {
         const zip64 = parseZip64Extra(extra, {
           size: size === 0xffffffff,
           compressedSize: compressedSize === 0xffffffff,
@@ -81,9 +90,14 @@ export class SeekableZipArchive {
         if (compressedSize === 0xffffffff) compressedSize = zip64.compressedSize;
         if (localHeaderOffset === 0xffffffff) localHeaderOffset = zip64.localHeaderOffset;
       }
-      if (size > limits.maxEntryBytes) throw limitError(`${name} uncompressed bytes`, size, limits.maxEntryBytes);
+      if (size > limits.maxEntryBytes)
+        throw limitError(`${name} uncompressed bytes`, size, limits.maxEntryBytes);
       if (compressedSize === 0 ? size > 0 : size / compressedSize > limits.maxCompressionRatio) {
-        throw limitError(`${name} compression ratio`, compressedSize === 0 ? Infinity : size / compressedSize, limits.maxCompressionRatio);
+        throw limitError(
+          `${name} compression ratio`,
+          compressedSize === 0 ? Infinity : size / compressedSize,
+          limits.maxCompressionRatio,
+        );
       }
       total += size;
       if (!Number.isSafeInteger(total) || total > limits.maxTotalBytes) {
@@ -103,14 +117,21 @@ export class SeekableZipArchive {
     return new SeekableZipArchive(source, records);
   }
 
-  private async *streamEntry(record: EntryRecord, signal?: AbortSignal): AsyncGenerator<Uint8Array> {
+  private async *streamEntry(
+    record: EntryRecord,
+    signal?: AbortSignal,
+  ): AsyncGenerator<Uint8Array> {
     checkCancelled(signal);
     if (record.isDirectory) return;
     if (record.method !== 0 && record.method !== 8) {
-      throw new FlexcilImportError("unsupported_compression", `${record.name} uses ZIP method ${record.method}`);
+      throw new FlexcilImportError(
+        "unsupported_compression",
+        `${record.name} uses ZIP method ${record.method}`,
+      );
     }
     const header = await readExact(this.source, record.localHeaderOffset, 30);
-    if (u32(header, 0) !== 0x04034b50) throw new FlexcilImportError("invalid_zip", `Invalid local header for ${record.name}`);
+    if (u32(header, 0) !== 0x04034b50)
+      throw new FlexcilImportError("invalid_zip", `Invalid local header for ${record.name}`);
     const dataOffset = record.localHeaderOffset + 30 + u16(header, 26) + u16(header, 28);
     if (dataOffset + record.compressedSize > this.source.size) {
       throw new FlexcilImportError("invalid_zip", `Truncated entry data for ${record.name}`);
@@ -120,7 +141,11 @@ export class SeekableZipArchive {
     let outputSize = 0;
     const accept = (chunk: Uint8Array): Uint8Array => {
       outputSize += chunk.length;
-      if (outputSize > record.size) throw new FlexcilImportError("invalid_zip", `${record.name} expands beyond its declared size`);
+      if (outputSize > record.size)
+        throw new FlexcilImportError(
+          "invalid_zip",
+          `${record.name} expands beyond its declared size`,
+        );
       crc.update(chunk);
       return chunk;
     };
@@ -128,7 +153,11 @@ export class SeekableZipArchive {
     if (record.method === 0) {
       for (let offset = 0; offset < record.compressedSize; offset += CHUNK_SIZE) {
         checkCancelled(signal);
-        const chunk = await readExact(this.source, dataOffset + offset, Math.min(CHUNK_SIZE, record.compressedSize - offset));
+        const chunk = await readExact(
+          this.source,
+          dataOffset + offset,
+          Math.min(CHUNK_SIZE, record.compressedSize - offset),
+        );
         yield accept(chunk);
       }
     } else {
@@ -139,7 +168,10 @@ export class SeekableZipArchive {
       for (let offset = 0; offset < record.compressedSize; offset += CHUNK_SIZE) {
         checkCancelled(signal);
         const length = Math.min(CHUNK_SIZE, record.compressedSize - offset);
-        inflate.push(await readExact(this.source, dataOffset + offset, length), offset + length === record.compressedSize);
+        inflate.push(
+          await readExact(this.source, dataOffset + offset, length),
+          offset + length === record.compressedSize,
+        );
         for (const chunk of pending.splice(0)) yield accept(chunk);
       }
       if (record.compressedSize === 0) inflate.push(new Uint8Array(), true);
@@ -147,15 +179,21 @@ export class SeekableZipArchive {
     }
 
     if (outputSize !== record.size) {
-      throw new FlexcilImportError("invalid_zip", `${record.name} produced ${outputSize} bytes; expected ${record.size}`);
+      throw new FlexcilImportError(
+        "invalid_zip",
+        `${record.name} produced ${outputSize} bytes; expected ${record.size}`,
+      );
     }
-    if (crc.digest() !== record.crc32) throw new FlexcilImportError("crc_mismatch", `${record.name} failed CRC-32 validation`);
+    if (crc.digest() !== record.crc32)
+      throw new FlexcilImportError("crc_mismatch", `${record.name} failed CRC-32 validation`);
   }
 }
 
 const CHUNK_SIZE = 16 * 1024;
 
-async function locateCentralDirectory(source: SeekableSource): Promise<{ entries: number; offset: number; size: number }> {
+async function locateCentralDirectory(
+  source: SeekableSource,
+): Promise<{ entries: number; offset: number; size: number }> {
   const tailLength = Math.min(source.size, 65_557);
   const tailOffset = source.size - tailLength;
   const tail = await readExact(source, tailOffset, tailLength);
@@ -166,14 +204,16 @@ async function locateCentralDirectory(source: SeekableSource): Promise<{ entries
       break;
     }
   }
-  if (position < 0) throw new FlexcilImportError("invalid_zip", "ZIP end-of-central-directory record is missing");
+  if (position < 0)
+    throw new FlexcilImportError("invalid_zip", "ZIP end-of-central-directory record is missing");
   if (u16(tail, position + 4) !== 0 || u16(tail, position + 6) !== 0) {
     throw new FlexcilImportError("multi_disk_zip", "Multi-disk ZIP archives are unsupported");
   }
   const entries = u16(tail, position + 10);
   const size = u32(tail, position + 12);
   const offset = u32(tail, position + 16);
-  if (entries !== 0xffff && size !== 0xffffffff && offset !== 0xffffffff) return { entries, size, offset };
+  if (entries !== 0xffff && size !== 0xffffffff && offset !== 0xffffffff)
+    return { entries, size, offset };
 
   const eocdOffset = tailOffset + position;
   if (eocdOffset < 20) throw new FlexcilImportError("invalid_zip", "ZIP64 locator is missing");
@@ -202,7 +242,8 @@ function parseZip64Extra(
     if (id === 1) {
       let valueCursor = body;
       const next = (): number => {
-        if (valueCursor + 8 > body + length) throw new FlexcilImportError("invalid_zip", "ZIP64 extra field is truncated");
+        if (valueCursor + 8 > body + length)
+          throw new FlexcilImportError("invalid_zip", "ZIP64 extra field is truncated");
         const value = u64(extra, valueCursor);
         valueCursor += 8;
         return value;
@@ -218,7 +259,11 @@ function parseZip64Extra(
   throw new FlexcilImportError("invalid_zip", "Required ZIP64 extra field is missing");
 }
 
-export async function collectEntry(entry: ZipEntry, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array> {
+export async function collectEntry(
+  entry: ZipEntry,
+  maxBytes: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
   if (entry.size > maxBytes) throw limitError(`${entry.name} bytes`, entry.size, maxBytes);
   const output = new Uint8Array(entry.size);
   let offset = 0;
@@ -229,7 +274,11 @@ export async function collectEntry(entry: ZipEntry, maxBytes: number, signal?: A
   return output;
 }
 
-export async function readEntryPrefix(entry: ZipEntry, length: number, signal?: AbortSignal): Promise<Uint8Array> {
+export async function readEntryPrefix(
+  entry: ZipEntry,
+  length: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
   const output = new Uint8Array(Math.min(length, entry.size));
   let offset = 0;
   for await (const chunk of entry.stream(signal)) {
@@ -262,17 +311,35 @@ function decodeName(bytes: Uint8Array, flags: number): string {
   }
 }
 
-async function readExact(source: SeekableSource, offset: number, length: number): Promise<Uint8Array> {
-  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > source.size) {
-    throw new FlexcilImportError("invalid_zip", `Invalid ZIP read at ${offset} for ${length} bytes`);
+async function readExact(
+  source: SeekableSource,
+  offset: number,
+  length: number,
+): Promise<Uint8Array> {
+  if (
+    !Number.isSafeInteger(offset) ||
+    !Number.isSafeInteger(length) ||
+    offset < 0 ||
+    length < 0 ||
+    offset + length > source.size
+  ) {
+    throw new FlexcilImportError(
+      "invalid_zip",
+      `Invalid ZIP read at ${offset} for ${length} bytes`,
+    );
   }
   const bytes = await source.read(offset, length);
-  if (bytes.length !== length) throw new FlexcilImportError("invalid_zip", `Short ZIP read at ${offset}: ${bytes.length}/${length}`);
+  if (bytes.length !== length)
+    throw new FlexcilImportError(
+      "invalid_zip",
+      `Short ZIP read at ${offset}: ${bytes.length}/${length}`,
+    );
   return bytes;
 }
 
 function u16(bytes: Uint8Array, offset: number): number {
-  if (offset < 0 || offset + 2 > bytes.length) throw new FlexcilImportError("invalid_zip", "Truncated ZIP integer");
+  if (offset < 0 || offset + 2 > bytes.length)
+    throw new FlexcilImportError("invalid_zip", "Truncated ZIP integer");
   return (bytes[offset] ?? 0) | ((bytes[offset + 1] ?? 0) << 8);
 }
 
@@ -282,12 +349,19 @@ function u32(bytes: Uint8Array, offset: number): number {
 
 function u64(bytes: Uint8Array, offset: number): number {
   const value = BigInt(u32(bytes, offset)) | (BigInt(u32(bytes, offset + 4)) << 32n);
-  if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new FlexcilImportError("zip_too_large", "ZIP64 value exceeds JavaScript's safe integer range");
+  if (value > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new FlexcilImportError(
+      "zip_too_large",
+      "ZIP64 value exceeds JavaScript's safe integer range",
+    );
   return Number(value);
 }
 
 function limitError(label: string, actual: number, limit: number): FlexcilImportError {
-  return new FlexcilImportError("size_limit", `${label} (${actual}) exceeds the configured limit (${limit})`);
+  return new FlexcilImportError(
+    "size_limit",
+    `${label} (${actual}) exceeds the configured limit (${limit})`,
+  );
 }
 
 function checkCancelled(signal?: AbortSignal): void {
@@ -311,6 +385,7 @@ class Crc32 {
 const CRC_TABLE = new Uint32Array(256);
 for (let index = 0; index < 256; index += 1) {
   let value = index;
-  for (let bit = 0; bit < 8; bit += 1) value = (value & 1) !== 0 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  for (let bit = 0; bit < 8; bit += 1)
+    value = (value & 1) !== 0 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
   CRC_TABLE[index] = value >>> 0;
 }

@@ -58,14 +58,14 @@ export function safeVaultPath(path: string) {
     !path ||
     path.includes("\\") ||
     path.includes("\0") ||
-    /^[\/]|^[a-z]:/i.test(path) ||
+    /^[/]|^[a-z]:/i.test(path) ||
     path.split("/").some((part) => !part || part === "." || part === "..")
   )
     throw new Error("Invalid vault file path.");
   return path;
 }
 export function vaultImagePaths(notePath: string, reference: string) {
-  if (/^[a-z][a-z\d+.-]*:|^[\/\\]/i.test(reference)) return [];
+  if (/^[a-z][a-z\d+.-]*:|^[/\\]/i.test(reference)) return [];
   let decoded: string;
   try {
     decoded = decodeURIComponent(reference);
@@ -254,6 +254,7 @@ export const vault = {
     if (!active) return doc;
     const extension = doc.kind === "note" ? ".md" : ".slate-notebook";
     const name =
+      // eslint-disable-next-line no-control-regex -- Strip control characters from vault file names.
       doc.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/, "") || "Untitled";
     let path = (folderPath ? folderPath + "/" : "") + name + extension;
     let counter = 1;

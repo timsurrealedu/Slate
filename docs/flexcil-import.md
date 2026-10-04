@@ -4,19 +4,19 @@ The importer is in `src/slate/import/flexcil`. Import accepts `.flex` library ba
 
 Flexcil handwriting, highlights, shapes, text objects, image placement, page rearrangements, added native pages, templates, and audio/stroke synchronization have **no verified decoder**. Slate cannot display or edit those Flexcil objects. The import report and document banner disclose this. A notebook without a recovered PDF receives blank placeholder pages; its preserved source remains recoverable. Keep Flexcil for viewing existing handwriting until a decoder is verified.
 
-## What was worth adapting from Kiro
+## What was worth adapting from the legacy prototype
 
 - The seekable ZIP/ZIP64 reader, nested `.flx` container findings, CRC checks, and path/encryption/size validation.
 - Per-document staging, cancellation, stable fingerprints, duplicate prevention, original preservation, and honest import reports.
 - Structural research, preserved in `flexcil-format-legacy-research.md` as historical reference.
 
-Kiro's UI, Tauri persistence, and `.slate` document model were incompatible with the maintained Codex application and were not merged. Its legacy research's optimistic predictions are not a verified handwriting decoder.
+the legacy prototype's UI, Tauri persistence, and `.slate` document model were incompatible with the maintained Slate application and were not merged. Its legacy research's optimistic predictions are not a verified handwriting decoder.
 
 ## Fresh evidence (2026-10-01)
 
 - Synthetic browser import through OPFS recovers a PDF, saves new Slate ink, skips an unchanged reimport, and exports `.flx` bytes exactly matching the input, after temporary-file cleanup.
 - The owner's local backup was opened read-only in an isolated browser profile. This importer recovered **17 documents, 17 PDFs, and 17 original PDF pages**. No private note text or archive entry names were written to the test report. Flexcil's added/rearranged pages were not reconstructed.
-- Kiro previously reported 34 structural pages and 195 source records. Those historical counts describe its mapping and must not be presented as this importer rendering 34 pages or decoding handwriting.
+- the legacy prototype previously reported 34 structural pages and 195 source records. Those historical counts describe its mapping and must not be presented as this importer rendering 34 pages or decoding handwriting.
 - Integrity tests cover source preservation through backup/restore, duplicate detection, cancellation, unsafe paths, and atomic document/asset commits.
 
 ## Bounds and recovery

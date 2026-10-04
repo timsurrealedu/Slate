@@ -1,6 +1,6 @@
 # Folder navigation and Markdown tags
 
-The maintained application remains the Codex build. Kiro is legacy reference. Slate's colors, fonts, paper treatment, and offline workspace remain unchanged.
+The maintained application remains the maintained application. the legacy prototype is legacy reference. Slate's colors, fonts, paper treatment, and offline workspace remain unchanged.
 
 - The sidebar starts with parent folders. Click a folder to expand it and open its library view; use the disclosure arrow to expand or collapse it independently. Nested folders and documents remain inside that branch.
 - The library displays the current folder's immediate subfolders and documents. Breadcrumbs return to a parent or Library. Recently opened previews can still surface documents from any visible folder.

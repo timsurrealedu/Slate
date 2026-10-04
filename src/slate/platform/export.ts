@@ -5,6 +5,7 @@ const nativeExport = registerPlugin<{
 export function exportFilename(name: string) {
   let safe =
     name
+      // eslint-disable-next-line no-control-regex -- Strip control characters from export names.
       .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
       .replace(/[. ]+$/, "")
       .slice(0, 200) || "Slate export";

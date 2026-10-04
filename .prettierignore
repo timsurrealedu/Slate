@@ -6,3 +6,9 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+.local
+releases
+artifacts
+android
+graphify-out
+.graphify

@@ -69,6 +69,7 @@ export function itemName(value: string) {
     !name ||
     name === "." ||
     name === ".." ||
+    // eslint-disable-next-line no-control-regex -- Reject control characters in file names.
     /[<>:"/\\|?*\x00-\x1f]/.test(name) ||
     /[. ]$/.test(name) ||
     /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)

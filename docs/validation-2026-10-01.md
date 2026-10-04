@@ -1,4 +1,4 @@
-# Validation — Codex Slate refinements, 2026-10-01
+# Validation — Slate refinements, 2026-10-01
 
 | Check | Evidence |
 | --- | --- |

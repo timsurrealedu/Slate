@@ -1,62 +1,65 @@
 # Slate
 
-A local-first study and knowledge workspace for Markdown, linked notes, page-based handwriting, PDFs and DOCX. The workspace stays on the device without an account.
+A local-first workspace for Markdown, linked notes, paged handwriting, PDFs and DOCX. Slate runs offline on Windows, Linux, Android and the web, with no account required.
 
-The 2026-10-01 refinements add connected vault folders, Vim, universal line numbers and layout, visual tables/math, ink transforms and gestures, and source-preserving Flexcil import. See [the usage guide](docs/refinements-2026-10-01.md) and [Flexcil findings](docs/flexcil-import.md). Updated local packages are in `releases/2026-10-01`; older distributed releases are historical.
+The maintained application lives at the repository root. The current local release is **0.1.12**. See [release status](docs/release-status.md) for validation evidence and device limitations.
 
-## Run and check
+## Features
 
-Use Node 22+ and Bun:
+- Markdown source, live preview and reading, with wiki links, backlinks, tags, Vim, tables and equations.
+- Connected folder vaults, nested folders, search, tabs and recoverable Trash.
+- Paged notebooks with pressure-aware ink, selection transforms, PDF annotation and touch gestures.
+- Saved layout and appearance preferences, local revision history and portable backups.
+- Source-preserving Flexcil import with PDF recovery. Existing Flexcil handwriting and synchronized audio have no verified decoder; see [import findings](docs/flexcil-import.md).
 
-    bun install --frozen-lockfile
-    bun run dev
-    bun run typecheck
-    bun run test
+## Development
 
-The independent application build has no hosted application runtime:
+Use Node.js 22 or newer and Bun 1.4.2. Dependencies and workspace packages are recorded in `bun.lock`.
 
-    bun run build:standalone
+```sh
+bun install --frozen-lockfile
+bun run dev
+```
 
-Its output is dist/standalone. Serve it over HTTPS or a stable localhost origin. The first browser load installs the offline shell; subsequent launches work offline. The source also retains the provider-specific deployment build, bun run build, with dist/server and dist/client output.
+Run commands from the repository root:
 
-## Windows and Linux
+```sh
+bun run typecheck
+bun run lint:slate
+bun run test
+bun run build:standalone
+bunx playwright install chromium
+bun run test:browser
+```
 
-Build the independent application, then:
+The browser suite starts its own production preview on port 3000. Set `SLATE_TEST_URL` to test an already running server; set `SLATE_PRODUCTION_TEST=1` when that server serves a production build. The optional real Flexcil fixture is supplied through `SLATE_FLEXCIL_FIXTURE` and is never committed.
 
-    bun run package:desktop
+## Build and run
 
-This produces x64 Windows and Linux application folders in artifacts/desktop. Keep each folder's contents together. Windows launches Slate.exe; Linux launches Slate. Node, Bun and a network connection are not needed to run the resulting application.
+**Independent web:** `bun run build:standalone` writes `dist/standalone`. Serve that folder over HTTPS or a stable localhost origin. After the first load, the cached application shell works offline. `bun run build` retains the optional hosted deployment build.
 
-On a Linux build machine with dpkg-deb installed, create the Debian/Ubuntu package:
+**Windows and Linux:** build the independent web application, then run `bun run package:desktop`. Application folders appear in `artifacts/desktop`; keep their contents together. Launch `Slate.exe` on Windows or `Slate` on Linux. On Linux with `dpkg-deb`, `bun run package:linux` also creates a versioned Debian package in `artifacts`.
 
-    bun run package:linux
+**Android:** use JDK 21 and Android SDK platform 36 / build tools 36.0.0, then run `bun run android:build`. The helper builds and synchronizes the web bundle and verifies the debug APK. Android 7 or newer is required. Signed updates use `bun run android:release --password-file /private/path/slate-signing.password`; preserve the existing signing identity and follow [signing instructions](platform/android/SIGNING.md).
 
-The result is artifacts/slate-0.1.0-linux-amd64.deb. It includes the launcher, application icon and root-owned Chromium sandbox helper. The application itself runs as the signed-in user.
-
-These are unsigned preview packages. The current Windows package passes native persistence, offline, save-failure, and connected-vault smoke tests. The rebuilt Linux package has not been run on Linux in this Windows session. Physical-device release checks remain outstanding.
-
-## Android
-
-The tracked Capacitor project bundles the same independent application. It uses touch navigation, device Back behavior, lifecycle save flushing and the native system Save dialog. It requires Android 7 or newer.
-
-Use JDK 21 and Android SDK platform 36/build tools 36.0.0, with the SDK terms accepted by the developer:
-
-    bun run build:standalone
-    bun run android:sync
-    bun run android:build
-
-The updated debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. On Windows, run `android/gradlew.bat assembleDebug` from the Android directory. The owner authorized Google's SDK terms on 2026-10-01. This session compiled the updated shared app and native folder plugin with JDK 21 / SDK 36. The older signed preview in docs/downloads.md is historical; its emulator validation was blocked by a system WebView crash. The new debug APK cannot update a release installation with a different signing identity. Native folder providers, Save, physical stylus and lifecycle checks require device validation.
-
-Signed updates use the encrypted development signing identity described in [platform/android/SIGNING.md](platform/android/SIGNING.md). Build with bun run android:release --password-file /private/path/slate-signing.password after synchronizing the independent assets. The password is a development credential, not an app login.
+Completed local deliveries belong in `releases/<date-description>/`, separate from build staging in `artifacts`. These generated folders are ignored by Git; distribute packages through GitHub Releases. The current local delivery is `releases/2026-10-03-final-polish`.
 
 ## Data and recovery
 
-IndexedDB stores versioned documents, recovery history and original files. Export portable .slate.zip backups in Settings. Restore validates hashes, adds fresh copies and leaves existing documents intact. Trash is reversible. Markdown exports as .md; notebooks as PDF; imported PDFs as preserved originals or annotated copies; DOCX retains its original.
+Notes, preferences, revision history and original imported files stay on the device. Connected vaults write Markdown back to their selected folders. Export portable `.slate.zip` backups from Settings; restore validates hashes and adds copies while preserving existing documents.
 
-Desktop data lives in the OS application-data directory, under Slate: %APPDATA%\Slate on Windows, and normally ~/.config/Slate on Linux. Replacing the application folder preserves that profile. Android data is private to the installation; automatic Android cloud backup is disabled. Browser data belongs to its exact origin and browser profile. Export before uninstalling, clearing data or moving to another device.
+Desktop profiles stay under `%APPDATA%/Slate` on Windows and normally `~/.config/Slate` on Linux. Android data belongs to the installation. Browser data belongs to its exact origin and profile. Retain those identities when updating; export a workspace backup before uninstalling or clearing application data.
 
-## Architecture, design and evidence
+## Repository
 
-See [docs/downloads.md](docs/downloads.md) for the verified preview files and updated source archive, docs/architecture.md for the data contract, docs/platforms.md for platform boundaries, and docs/release-status.md for verification and limits. PRODUCT.md records the requirements; DESIGN.md and .impeccable/design.json describe the implemented visual system.
+| Path         | Purpose                                                        |
+| ------------ | -------------------------------------------------------------- |
+| `src/slate/` | Shared application, storage, Markdown, ink and document import |
+| `platform/`  | Electron packaging and Android build helpers                   |
+| `android/`   | Native Capacitor project                                       |
+| `tests/`     | Unit, browser and desktop checks                               |
+| `public/`    | Local fonts, icons and document rendering assets               |
+| `packages/`  | Local workspace dependencies                                   |
+| `docs/`      | Architecture, import research and validation records           |
 
-See [current validation](docs/validation-2026-10-01.md). The independent build passes 18 production Chromium workflows, including first-use offline math and Flexcil OPFS source recovery. The current Windows package has separate persistence and native-vault smoke checks. No physical stylus or new Linux runtime result is implied by browser emulation. Desktop and independent web packages run without a hosting provider.
+Read [PRODUCT.md](PRODUCT.md), [DESIGN.md](DESIGN.md) and [the contribution guide](CONTRIBUTING.md) before changing the application. [Repository layout](docs/repository-layout.md) records the history migration and local backup locations.

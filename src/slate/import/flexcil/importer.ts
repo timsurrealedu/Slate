@@ -1,4 +1,4 @@
-// Container reader adapted from Slate-kiro. Mapping deliberately targets the Codex data model.
+// Container reader adapted from legacy research. Mapping targets the maintained Slate data model.
 import {
   SeekableZipArchive,
   collectEntry,
@@ -163,7 +163,7 @@ export async function importFlexcil(
           const pdf = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
           pdfs.push({ entry, blob: pdf, id });
           assets.push({ id, blob: pdf });
-        } else if (entry.size <= 4 * MB && /^[\s]*[\[{]/.test(new TextDecoder().decode(prefix))) {
+        } else if (entry.size <= 4 * MB && /^[\s]*[[{]/.test(new TextDecoder().decode(prefix))) {
           try {
             records.push(
               ...objects(
