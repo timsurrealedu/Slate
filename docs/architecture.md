@@ -24,11 +24,11 @@ Trash is reversible. Backup export includes the versioned manifest, documents, f
 
 ## Markdown
 
-Markdown text is authoritative. No rich text document model. Live Preview only decorates the CodeMirror document, revealing syntax on the active line. The same editor instance persists between source and live modes. Reading is sanitized GFM and KaTeX, with local wiki links. Raw HTML is disabled. The renderer blocks executable URLs and remote embedded images to avoid background network requests from notes. User-activated external links are allowed.
+Markdown text is authoritative. No rich text document model. Live Preview only decorates the CodeMirror document, revealing syntax on the active line. The same editor instance persists between source and live modes. Reading supports GFM, KaTeX, local wiki links and sanitized HTML, including Obsidian-style callouts and highlights. DOMPurify sanitizes the shared renderer. Executable URLs and remote embedded images are blocked to avoid background network requests from notes. User-activated external links are allowed.
 
 ## Ink and annotations
 
-Ink points are stored in unscaled page coordinates, including pressure and timestamp. Pointer events and coalesced samples update a canvas directly without a React render per point. A completed stroke uses perfect-freehand outlines. Highlighters are transparent; erasing deletes hit strokes; selection moves, rotates and scales ink without rasterizing it. Two fingers pan/pinch regardless of tool; double two-finger taps undo. Templates are independent of ink. PDF uses the same page-coordinate overlay and never edits the original source. Annotated PDF export writes a new file.
+Ink points are stored in unscaled page coordinates, including pressure and timestamp. Pointer events and coalesced samples feed vector rendering. New strokes use pressure-aware rounded segments that follow the recorded samples without shifting earlier ink; older strokes retain their perfect-freehand outlines. SVG presentation and canvas/PDF export share the stroke geometry. Highlighters are transparent; erasing deletes hit strokes; selection moves, rotates and scales ink without rasterizing it. Two fingers pan/pinch regardless of tool; double two-finger taps undo. Templates are independent of ink. PDF uses the same page-coordinate overlay and never edits the original source. Annotated PDF export writes a new file.
 
 ## Offline and upgrades
 
@@ -36,4 +36,4 @@ A generated service worker precaches the shell, hashed application modules, work
 
 ## Verification limits
 
-Current browser and Windows-native evidence is recorded in validation-2026-10-01.md. Android hardware keyboard detection is tested using Chromium's Android user-agent and synthetic keyboard events. Real Android document providers, palm rejection, stylus latency, and the rebuilt Linux executable require their own runtime/device validation.
+Current production-browser and packaged Windows/Linux evidence is recorded in [final-polish-2026-10-03.md](final-polish-2026-10-03.md); Linux runtime checks used WSLg. Earlier scoped checks remain in [validation-2026-10-01.md](validation-2026-10-01.md). Android keyboard and Back behavior have browser simulations and native compilation evidence. Physical Android document providers, gestures, palm rejection and stylus latency still require device validation.

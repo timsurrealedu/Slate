@@ -1,6 +1,6 @@
 # Platform delivery
 
-Slate 0.1.0 shares one React/TypeScript study core. A small platform boundary adapts application lifecycle, external links and exports. The hosted provider is optional for local packages.
+Slate shares one React/TypeScript study core. A small platform boundary adapts application lifecycle, external links and exports. The hosted provider is optional for local packages. See [release status](release-status.md) for the current version and delivery evidence.
 
 ## Independent web build
 
@@ -32,6 +32,6 @@ The adaptive application uses a navigation drawer and bottom navigation on phone
 
 ## Build and release limits
 
-The source pins dependencies in bun.lock. Desktop binaries are unsigned preview packages; Android has a preserved release signature. A Windows package created on Linux is packaging evidence, not a Windows launch result. The Linux smoke check runs a real packaged executable under a virtual display; its container-only test invocation disables the Chromium sandbox. Production launch does not set that flag.
+The source pins dependencies in bun.lock. Desktop binaries are unsigned preview packages. The current 0.1.12 delivery passed packaged Windows and Linux runtime checks, including saving, relaunch, ink and backup export. Linux ran through WSLg, with the Chromium sandbox disabled only for the test invocation. Production launch does not set that flag. See [the current validation record](final-polish-2026-10-03.md).
 
-The user explicitly authorized Google’s SDK terms. Android SDK platform 36/build tools 36.0.0 installed successfully, and both debug and release variants compile. The release passes APK signature and ZIP integrity checks and has WebView debugging disabled. Its encrypted signing identity is preserved for future updates; see ../platform/android/SIGNING.md. The signed APK installs in the API 36 emulator. That emulator fails inside its system WebView; a minimal WebView app without Slate reproduces the crash. Native workflows remain unverified. See [the runtime evidence](../.impeccable/review/android-runtime.json). Physical-device checks remain open.
+Android uses SDK platform 36/build tools 36.0.0. The current APK compiles the native predictive Back callbacks and passes asset and signature verification, using the existing development certificate. Updating a release-signed installation requires the preserved release identity; see [signing instructions](../platform/android/SIGNING.md). Earlier release builds compiled and installed in an API 36 emulator, whose system WebView also crashed with a minimal non-Slate application; see [the runtime evidence](../.impeccable/review/android-runtime.json). Physical Android workflow, gesture, stylus and keyboard checks remain open.
