@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
-import { Compartment, EditorState, Prec } from "@codemirror/state";
+import { Annotation, Compartment, EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -16,7 +16,7 @@ import { tags } from "@lezer/highlight";
 import { search, searchKeymap } from "@codemirror/search";
 import { livePreview, fileTitle } from "./live-preview";
 import { FileTitle } from "./FileTitle";
-import { titleHeading, withoutTitleHeading } from "./metadata";
+import { titleHeading, withoutTitleHeading, noteHeadings } from "./metadata";
 import { renderMarkdown, localImageReferences } from "./render";
 import { getAsset } from "../core/storage";
 import { vimBindings } from "./vim";
@@ -24,6 +24,7 @@ import type { Preferences } from "../core/model";
 import { workspace } from "../core/workspace";
 import { vault, vaultImagePaths } from "../platform/vault";
 export type EditorMode = "live" | "source" | "reading";
+const externalContent = Annotation.define<boolean>();
 export interface MarkdownHandle {
   insert(before: string, after?: string): void;
   goToLine(line: number): void;
@@ -115,13 +116,11 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
       },
       goToLine(line) {
         if (current.current.mode === "reading") {
-          const nodes = reading.current?.querySelectorAll("h1,h2,h3,h4,h5,h6");
-          const headings = current.current.content
-            .split("\n")
-            .map((text, i) => ({ text, line: i + 1 }))
-            .filter((x) => /^#{1,6}\s/.test(x.text));
+          const nodes = Array.from(reading.current?.querySelectorAll("h1,h2,h3,h4,h5,h6") || []);
+          if (!titleHeading(current.current.content)) nodes.shift();
+          const headings = noteHeadings(current.current.content);
           const index = headings.findIndex((x) => x.line === line);
-          nodes?.[index]?.scrollIntoView({
+          nodes[index]?.scrollIntoView({
             behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
             block: "start",
           });
@@ -283,7 +282,19 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
               current.current.preferences.lineNumbers ? lineNumbers() : [],
             ),
             EditorView.updateListener.of((update) => {
-              if (update.docChanged) current.current.onChange(update.state.doc.toString());
+              if (
+                update.transactions.some(
+                  (transaction) =>
+                    transaction.docChanged && !transaction.annotation(externalContent),
+                )
+              )
+                current.current.onChange(
+                  update.state.doc.sliceString(
+                    0,
+                    update.state.doc.length,
+                    current.current.content.includes("\r\n") ? "\r\n" : "\n",
+                  ),
+                );
             }),
             EditorView.contentAttributes.of({
               "aria-label": "Markdown editor",
@@ -309,8 +320,11 @@ export const MarkdownEditor = forwardRef<MarkdownHandle, Props>(
     }, [props.id]);
     useEffect(() => {
       const v = view.current;
-      if (v && v.state.doc.toString() !== props.content)
-        v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.content } });
+      if (v && !v.state.doc.eq(v.state.toText(props.content)))
+        v.dispatch({
+          changes: { from: 0, to: v.state.doc.length, insert: props.content },
+          annotations: externalContent.of(true),
+        });
     }, [props.content]);
     useEffect(() => {
       view.current?.dispatch({

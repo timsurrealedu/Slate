@@ -1,4 +1,33 @@
 @import "./notebook.css";
+.navigation-stack {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.navigation-stack > :is(.library-pane, .document-shell) {
+  grid-area: 1 / 1;
+  min-height: 0;
+  min-width: 0;
+}
+.library-behind {
+  visibility: hidden;
+}
+.back-preview > .library-behind {
+  visibility: visible;
+}
+.document-shell {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  overflow: hidden;
+  z-index: 1;
+  transform-origin: center;
+}
+.document-shell[data-leaving="true"] {
+  pointer-events: none;
+}
 .document-titlebar {
   min-height: 50px;
   display: flex;
@@ -175,6 +204,7 @@
   min-height: 0;
 }
 .note-workspace {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -809,7 +839,7 @@
     display: flex;
   }
 }
-@media (max-width: 960px) {
+@media (max-width: 960px), (pointer: coarse) {
   .document-titlebar {
     min-height: 52px;
     gap: 8px;
@@ -824,6 +854,16 @@
     height: 44px;
     min-width: 44px;
     min-height: 44px;
+  }
+  .document-titlebar .file-title input {
+    min-height: 44px;
+    font-size: 13px;
+    font-weight: 550;
+  }
+  .document-titlebar,
+  .markdown-toolbar,
+  .notebook-controls {
+    touch-action: pan-y;
   }
 }
 @media (max-width: 760px) {
@@ -865,9 +905,14 @@
     height: 32px;
   }
   .markdown-toolbar {
-    min-height: 54px;
-    padding: 3px 8px;
+    min-height: 44px;
+    padding: 0 8px;
     gap: 8px;
+  }
+  .editor-modes {
+    background: transparent;
+    padding: 0;
+    gap: 0;
   }
   .editor-modes {
     flex: 0 1 auto;
@@ -890,6 +935,32 @@
   .editor-options .icon-button {
     min-width: 44px;
     min-height: 44px;
+  }
+  .markdown-toolbar :is(.editor-modes > button, .editor-options .icon-button) {
+    position: relative;
+    isolation: isolate;
+    background: transparent;
+    box-shadow: none;
+  }
+  .markdown-toolbar :is(.editor-modes > button, .editor-options .icon-button)::before {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 4px;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .markdown-toolbar
+    :is(.editor-modes > button, .editor-options .icon-button):hover:not(:disabled)::before {
+    background: var(--hover);
+  }
+  .markdown-toolbar
+    :is(.editor-modes > button.active, .editor-options .icon-button[data-state="open"])::before {
+    background: var(--accent-wash);
+    border: 1px solid var(--line);
+  }
+  .markdown-toolbar .editor-options .icon-button[data-state="open"] {
+    color: var(--accent);
   }
   .cm-content,
   .reading-prose {
@@ -914,7 +985,18 @@
     font-size: 1.6em;
   }
   .note-footnote {
-    padding: 7px 15px;
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    min-height: 26px;
+    max-width: calc(100% - 24px);
+    padding: 6px 10px;
+    font-size: 10px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    pointer-events: none;
   }
   .note-footnote > span:first-child {
     display: none;
@@ -1121,6 +1203,13 @@
   gap: 10px;
   margin-top: 24px;
 }
+.equation-composer.modal-content {
+  --equation-keyboard-inset: calc(
+    var(--equation-keyboard-height, 0px) + env(safe-area-inset-bottom, 0px)
+  );
+  top: calc((100dvh - var(--equation-keyboard-inset)) / 2);
+  max-height: calc(100dvh - var(--equation-keyboard-inset) - 40px);
+}
 .equation-field {
   min-height: 80px;
   margin: 24px 0 18px;
@@ -1218,6 +1307,9 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+.note-tag-property {
+  margin-bottom: 16px;
+}
 .tag-link {
   display: inline-flex;
   align-items: center;
@@ -1248,6 +1340,7 @@
 }
 @media (pointer: coarse) {
   .note-metadata .tag-link,
+  .note-tag-property .tag-link,
   .metadata-source,
   .folder-breadcrumbs button,
   .folder-navigation-row .folder-disclosure,

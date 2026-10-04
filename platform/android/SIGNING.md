@@ -16,4 +16,4 @@ The expected certificate SHA-256 fingerprint is recorded in the encrypted envelo
 
 Debug builds use the separate Android development key. Do not install a debug build over a release workspace or discard a workspace to resolve a signature mismatch. Use a disposable emulator for development checks.
 
-`npm run android:build` performs the same build and file/signature verification for a debug APK. Version 0.1.6 has versionCode 7 and retains the application ID and localhost origin. Both variants require Android API 24 or later. A verified debug APK still cannot update the original signed release.
+`npm run android:build` performs the same build and file/signature verification for a debug APK. Version 0.1.12 has versionCode 13 and retains the application ID and localhost origin. Its debug certificate matches 0.1.11. Both variants require Android API 24 or later. A verified debug APK still cannot update the original signed release.

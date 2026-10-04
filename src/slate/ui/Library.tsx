@@ -13,7 +13,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { SlateDocument, Folder as SlateFolder } from "../core/model";
-import { renderMarkdown } from "../markdown/render";
+import { renderMarkdownPreview } from "../markdown/render";
 import { PaperThumbnail } from "./Paper";
 import {
   IconButton,
@@ -25,8 +25,7 @@ import {
   type MenuAction,
 } from "./shared";
 import { folderName, folderChildren, folderTrail } from "../core/folders";
-import { documentTags, frontmatter, metadataTags, previewSource } from "../markdown/metadata";
-import { tagHtml } from "../markdown/render";
+import { documentTags } from "../markdown/metadata";
 import { dragItem, dropInto, type LibraryItem } from "./drag";
 import { parentFolder } from "../core/folders";
 export type LibraryView = "library" | "recent" | "starred" | "trash" | string;
@@ -98,7 +97,7 @@ export function Library(props: Props) {
             ? b.openedAt - a.openedAt
             : b.updatedAt - a.updatedAt,
     );
-  }, [props.documents, props.view, props.folders, filter, sort, folder]);
+  }, [props.documents, props.view, filter, sort, folder, tag]);
   const recent = props.documents
     .filter((doc) => !doc.trashedAt)
     .sort((a, b) => b.openedAt - a.openedAt)
@@ -165,14 +164,7 @@ export function Library(props: Props) {
                     className="prose mini-prose"
                     inert
                     dangerouslySetInnerHTML={{
-                      __html:
-                        '<div class="preview-tags">' +
-                        metadataTags(frontmatter(doc.content)?.properties || {})
-                          .slice(0, 4)
-                          .map(tagHtml)
-                          .join("") +
-                        "</div>" +
-                        renderMarkdown(previewSource(doc.content)),
+                      __html: renderMarkdownPreview(doc.content),
                     }}
                   />
                 </div>

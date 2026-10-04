@@ -113,17 +113,15 @@ test("Pen pressure survives saving, touch pans by default, finger ink is explici
   await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: touches(30) });
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   expect((await latest(page)).pages[0].strokes.length).toBe(1);
-  const toggle = (await page
-    .getByRole("button", { name: "Touch pans. Switch to touch drawing", exact: true })
-    .boundingBox())!;
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: toggle.x + toggle.width / 2, y: toggle.y + toggle.height / 2, id: 1 }],
-  });
-  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.getByRole("button", { name: "Ink options", exact: true }).tap();
+  await page
+    .getByRole("menuitem", { name: "Touch pans. Switch to touch drawing", exact: true })
+    .tap();
+  await page.getByRole("button", { name: "Ink options", exact: true }).tap();
   await expect(
-    page.getByRole("button", { name: "Touch draws. Switch to touch panning", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("menuitem", { name: "Touch draws. Switch to touch panning", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   b = (await c.boundingBox())!;
   await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: touches(0) });
   await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: touches(30) });

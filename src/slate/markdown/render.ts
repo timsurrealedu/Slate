@@ -1,17 +1,19 @@
 import { Marked, type TokensList } from "marked";
 import DOMPurify from "dompurify";
 import katex from "katex";
-import { frontmatter, metadataTags, inlineTag } from "./metadata";
+import { frontmatter, metadataTags, inlineTag, tagProperty, previewSource } from "./metadata";
 const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 export const mathHtml = (text: string, display = false) =>
-  katex.renderToString(text, {
-    displayMode: display,
-    throwOnError: false,
-    trust: false,
-    strict: "ignore",
-    output: "htmlAndMathml",
-  });
+  katex
+    .renderToString(text, {
+      displayMode: display,
+      throwOnError: false,
+      trust: false,
+      strict: "ignore",
+      output: "htmlAndMathml",
+    })
+    .replace('<span class="katex-display">', '<span class="katex-display" tabindex="0">');
 const markdown = new Marked({ gfm: true, breaks: false });
 export function markdownBlocks(source: string) {
   let from = 0;
@@ -79,6 +81,22 @@ markdown.use({
     },
   },
   extensions: [
+    {
+      name: "tagProperty",
+      level: "block",
+      start: (src) => src.search(/^ {0,3}(?:#{1,6}[ \t]+)?tags?:[ \t]*\\?\[/im),
+      tokenizer(src) {
+        const property = tagProperty(src);
+        if (property) return { type: "tagProperty", raw: property.raw, tags: property.tags };
+      },
+      renderer(token) {
+        return (
+          '<div class="note-tags note-tag-property" aria-label="Note tags">' +
+          token.tags.map(tagHtml).join("") +
+          "</div>"
+        );
+      },
+    },
     {
       name: "obsidianBlockComment",
       level: "block",
@@ -284,6 +302,33 @@ export function renderMarkdown(
   });
   return template.innerHTML;
 }
+
+export function renderMarkdownPreview(source: string) {
+  if (typeof window === "undefined") return "";
+  const tags = metadataTags(frontmatter(source)?.properties || {});
+  const template = document.createElement("template");
+  template.innerHTML = renderMarkdown(previewSource(source));
+  template.content.querySelectorAll(".markdown-block > .note-tag-property").forEach((property) => {
+    property
+      .querySelectorAll<HTMLElement>("[data-tag]")
+      .forEach((tag) => tags.push(tag.dataset.tag!));
+    property.closest(".markdown-block")?.remove();
+  });
+  let hasBody = false;
+  for (const block of Array.from(template.content.children)) {
+    const hasContent = block.textContent?.trim() || block.querySelector("img,svg,math,table,input");
+    if (!hasContent && (!hasBody || !block.querySelector("hr"))) block.remove();
+    else hasBody = true;
+  }
+  return (
+    (tags.length
+      ? '<div class="preview-tags">' +
+        [...new Set(tags)].slice(0, 4).map(tagHtml).join("") +
+        "</div>"
+      : "") + template.innerHTML
+  );
+}
+
 export function sanitizeDocx(html: string) {
   const clean = DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },

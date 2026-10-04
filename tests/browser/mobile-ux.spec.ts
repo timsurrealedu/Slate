@@ -49,7 +49,7 @@ test("one heading renames Markdown, source changes persist, and mobile tools sta
   await expect(page.locator(".live-block h1")).toHaveCount(0);
   expect((await page.locator(".markdown-toolbar").boundingBox())!.height).toBeLessThanOrEqual(60);
   await page.getByRole("button", { name: "Document actions", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Rename file", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Rename file", exact: true })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "Remove from Starred", exact: true }),
   ).toBeVisible();
@@ -139,7 +139,7 @@ test("notebook zoom reaches 500 percent without blank frames and Fine ink is thi
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
   await expect(page.locator(".workspace-topbar")).toBeHidden();
   await page.getByRole("button", { name: "Hide pages", exact: true }).click();
-  await page.getByRole("button", { name: "Pen thickness", exact: true }).click();
+  await page.getByRole("button", { name: "Pen (P)", exact: true }).click();
   await page.getByRole("button", { name: "Fine", exact: true }).click();
   await page.keyboard.press("Escape");
   await draw(page, { x: 35, y: 70 }, { x: 165, y: 100 });
@@ -202,6 +202,7 @@ test("notebook zoom reaches 500 percent without blank frames and Fine ink is thi
 
 test("compact notes fit landscape and tablet widths while desktop retains its vault menu", async ({
   page,
+  browser,
 }) => {
   await ready(page);
   await page.getByLabel("Open Oscillations & waves", { exact: true }).first().click();
@@ -215,6 +216,15 @@ test("compact notes fit landscape and tablet widths while desktop retains its va
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(size.width);
   }
   await page.screenshot({ path: "artifacts/mobile-ux-tablet.png" });
+  const desktop = await browser.newContext({
+    hasTouch: false,
+    isMobile: false,
+    viewport: { width: 1440, height: 960 },
+    baseURL: process.env.SLATE_TEST_URL || "http://localhost:3000",
+  });
+  page = await desktop.newPage();
+  await ready(page);
+  await page.getByLabel("Open Oscillations & waves", { exact: true }).first().click();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1440, height: 960 });
   await expect(page.locator(".slate-app")).toHaveClass(/with-sidebar/);
@@ -240,4 +250,5 @@ test("compact notes fit landscape and tablet widths while desktop retains its va
     true,
   );
   await page.screenshot({ path: "artifacts/mobile-ux-dark.png" });
+  await desktop.close();
 });

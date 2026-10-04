@@ -20,6 +20,7 @@ export function useDrawerGestures({
     if (!compact) return;
     let gesture: {
       side: "left" | "right";
+      fromHeader: boolean;
       x: number;
       y: number;
       width: number;
@@ -64,20 +65,23 @@ export function useDrawerGestures({
       )
         return;
       const drawer = target.closest(".navigation-modal,.context-modal");
-      const edge = target.closest<HTMLElement>("[data-drawer-edge]")?.dataset.drawerEdge;
+      const header =
+        !sidebar &&
+        !context &&
+        hasDocument &&
+        target.closest(".document-titlebar,.markdown-toolbar,.notebook-controls");
       const currentSide = drawer
         ? drawer.classList.contains("navigation-modal")
           ? "left"
           : "right"
-        : edge === "right" && hasDocument
-          ? "right"
-          : edge === "left" || (!sidebar && !context && target.closest(".library-pane"))
-            ? "left"
-            : null;
+        : header || (!sidebar && !context && target.closest(".library-pane"))
+          ? "left"
+          : null;
       if (!currentSide) return;
       const initial = currentSide === "left" ? Number(sidebar) : Number(context);
       gesture = {
         side: currentSide,
+        fromHeader: !!header,
         x: touch.clientX,
         y: touch.clientY,
         width: Math.min(currentSide === "left" ? 265 : 300, innerWidth * 0.85),
@@ -104,6 +108,10 @@ export function useDrawerGestures({
           return;
         }
         if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        if (gesture.fromHeader) {
+          gesture.side = dx > 0 ? "left" : "right";
+          gesture.width = Math.min(gesture.side === "left" ? 265 : 300, innerWidth * 0.85);
+        }
         const direction = dx * (gesture.side === "left" ? 1 : -1);
         if ((!gesture.initial && direction < 0) || (gesture.initial && direction > 0)) {
           gesture = null;

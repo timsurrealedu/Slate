@@ -34,7 +34,9 @@ interface Props {
   transparent?: boolean;
   onChange(strokes: Stroke[]): void;
   onHistory?(undo: boolean, redo: boolean, selection: boolean): void;
-  onPinch?(factor: number): void;
+  onPinch?(factor: number, x: number, y: number, previousX: number, previousY: number): void;
+  onPinchStart?(x: number, y: number): void;
+  onPinchEnd?(): void;
 }
 interface Gesture {
   pointerType: string;
@@ -79,6 +81,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     frame: 0,
     touches: new Map<number, { x: number; y: number }>(),
     pinchDistance: 0,
+    penUntil: 0,
     twoFinger: null as {
       started: number;
       x: number;
@@ -311,8 +314,8 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       const b = canvas.getBoundingClientRect(),
         p = propsRef.current.page;
       return {
-        x: Math.max(0, Math.min(p.width, ((e.clientX - b.left) * p.width) / b.width)),
-        y: Math.max(0, Math.min(p.height, ((e.clientY - b.top) * p.height) / b.height)),
+        x: ((e.clientX - b.left) * p.width) / b.width,
+        y: ((e.clientY - b.top) * p.height) / b.height,
         p: e.pointerType === "pen" ? e.pressure || 0.5 : 0.5,
         t: e.timeStamp,
       };
@@ -331,9 +334,27 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       const r = runtime.current,
         p = propsRef.current;
       if (e.pointerType === "touch" && r.gesture?.pointerType === "pen") return;
+      if (e.pointerType === "touch" && performance.now() < r.penUntil && !r.touches.size) {
+        // Reject a lone palm near the nib, but let a second finger start an intentional gesture.
+        r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        return;
+      }
       if (e.pointerType === "pen" && r.gesture?.pointerType === "touch") {
-        finish();
+        // A palm that lands before the nib must not leave ink or shift the paper.
+        r.gesture = null;
+        r.rect = null;
+        r.twoFinger = null;
+        r.lastTap = null;
         r.touches.clear();
+        redrawBase();
+      }
+      if (e.pointerType === "pen") {
+        if (r.twoFinger) p.onPinchEnd?.();
+        r.penUntil = performance.now() + 350;
+        r.touches.clear();
+        r.twoFinger = null;
+        r.lastTap = null;
+        r.pinchDistance = 0;
       }
       if (e.pointerType === "touch") {
         r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -346,6 +367,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           r.pinchDistance = Math.hypot(a.x - b.x, a.y - b.y);
           const x = (a.x + b.x) / 2,
             y = (a.y + b.y) / 2;
+          p.onPinchStart?.(x, y);
           r.twoFinger = {
             started: e.timeStamp,
             x,
@@ -412,6 +434,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           color: p.color,
           width: p.tool === "highlighter" ? 14 + ((p.width - 0.6) / 0.6) * 2 : p.width,
           points: [start],
+          rendering: "direct",
         };
       if (mode === "erase") erase(start.x, start.y);
       if (mode === "select") {
@@ -426,6 +449,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     }
     function move(e: PointerEvent) {
       const r = runtime.current;
+      if (e.pointerType === "pen") r.penUntil = performance.now() + 350;
       if (r.touches.has(e.pointerId)) {
         r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (r.touches.size > 1) {
@@ -441,15 +465,15 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
               Math.abs(distance - two.distance) > 8
             )
               two.moved = true;
-            if (viewport) {
+            if (propsRef.current.onPinch && r.pinchDistance > 0 && distance > 10) {
+              propsRef.current.onPinch(distance / r.pinchDistance, x, y, two.x, two.y);
+            } else if (viewport) {
               viewport.scrollLeft -= x - two.x;
               viewport.scrollTop -= y - two.y;
             }
             two.x = x;
             two.y = y;
           }
-          if (r.pinchDistance > 0 && distance > 10)
-            propsRef.current.onPinch?.(distance / r.pinchDistance);
           r.pinchDistance = distance;
           return;
         }
@@ -465,13 +489,17 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         }
         return;
       }
-      const samples = e.getCoalescedEvents?.() || [e];
+      const samples = [...(e.getCoalescedEvents?.() || []), e];
       for (const sample of samples.length ? samples : [e]) {
         const next = point(sample);
         if (g.mode === "draw") {
           const points = g.stroke!.points,
             last = points[points.length - 1];
-          if (Math.hypot(next.x - last.x, next.y - last.y) > 0.25) points.push(next);
+          if (
+            Math.hypot(next.x - last.x, next.y - last.y) > 0.001 ||
+            Math.abs(next.p - last.p) > 0.02
+          )
+            points.push(next);
         } else if (g.mode === "erase") erase(next.x, next.y);
         else if (g.mode === "select")
           r.rect = {
@@ -518,6 +546,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         if (r.touches.size < 2) r.pinchDistance = 0;
         if (r.twoFinger) {
           if (r.touches.size === 0) {
+            propsRef.current.onPinchEnd?.();
             const two = r.twoFinger;
             if (!two.moved && e.timeStamp - two.started < 250) {
               const previous = r.lastTap;
@@ -537,6 +566,13 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       }
       const g = r.gesture;
       if (!g || (e && g.id !== e.pointerId)) return;
+      if (e?.type === "pointerup" && g.mode === "draw" && g.stroke) {
+        const last = g.stroke.points[g.stroke.points.length - 1],
+          next = point(e);
+        // Lift-off reports zero pressure; keep the contact's width at its final coordinate.
+        if (!e.pressure) next.p = last.p;
+        if (Math.hypot(next.x - last.x, next.y - last.y) > 0.001) g.stroke.points.push(next);
+      }
       r.gesture = null;
       if (g.mode === "draw" && g.stroke) commit([...g.original, g.stroke]);
       else if (
@@ -557,6 +593,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     }
     function cancel(e: PointerEvent) {
       const r = runtime.current;
+      if (r.twoFinger) propsRef.current.onPinchEnd?.();
       r.touches.delete(e.pointerId);
       r.twoFinger = null;
       r.lastTap = null;

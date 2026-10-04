@@ -1,6 +1,6 @@
 # Release status
 
-The current local behavior update is Slate 0.1.6 / Android versionCode 7. Packages are in `releases/2026-10-02-behavior`; see [behavior validation](behavior-2026-10-02.md). The records below describe the original release.
+The final local delivery is Slate 0.1.12 / Android versionCode 13. Packages are in `releases/2026-10-03-final-polish`; see [final polish and validation](final-polish-2026-10-03.md). Persistent side handles are removed, pinch rendering avoids repeated canvas resizing, and mobile toolbar marks fit the compact row. The equation keyboard accepts complete expressions, keeps the popup open and cleans up on insertion/dismissal, including Android Back. Windows and Linux native checks, 45 unit tests and 64 production browser workflows pass. The Android APK uses the existing development certificate. The records below describe the original release.
 
 The sections below describe the earlier 0.1.0 distribution. The maintained Codex application's 2026-10-01 update, local packages, and current evidence are in [refinements-2026-10-01.md](refinements-2026-10-01.md) and [validation-2026-10-01.md](validation-2026-10-01.md). The new Android artifact is a debug preview, not a newly signed release update.
 

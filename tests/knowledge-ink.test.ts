@@ -8,7 +8,27 @@ import {
   type Stroke,
 } from "../src/slate/core/model";
 import { hitStroke, bounds, translate } from "../src/slate/ink/geometry";
+import { strokePath } from "../src/slate/ink/render";
 describe("knowledge and notebook model", () => {
+  it("keeps completed direct ink fixed as sharp turns and pressure samples arrive", () => {
+    const stroke: Stroke = {
+      id: "direct",
+      rendering: "direct",
+      tool: "pen",
+      color: "#385775",
+      width: 1.2,
+      points: [
+        { x: 10, y: 10, p: 0.2, t: 0 },
+        { x: 100, y: 10, p: 0.8, t: 1 },
+      ],
+    };
+    const initial = strokePath(stroke);
+    stroke.points.push({ x: 100, y: 80, p: 0.4, t: 2 }, { x: 20, y: 80, p: 0.6, t: 3 });
+    expect(strokePath(stroke).startsWith(initial)).toBe(true);
+    expect(strokePath({ ...stroke, points: [...stroke.points] })).toBe(strokePath(stroke));
+    expect(strokePath(translate(stroke, 5, 10))).not.toBe(strokePath(stroke));
+    expect(translate(stroke, 5, 10).rendering).toBe("direct");
+  });
   it("finds real wiki links while ignoring source examples", () => {
     const text =
       "[[Physics|alias]] [[Physics#Energy]]\n\x60[[Not a link]]\x60\n\x60\x60\x60md\n[[Code sample]]\n\x60\x60\x60\n[[Algebra]]";

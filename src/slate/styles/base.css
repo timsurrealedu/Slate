@@ -583,6 +583,12 @@ kbd {
   min-height: 0;
   overflow: hidden;
 }
+.workspace-topbar {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slate-app.has-document .workspace-topbar {
+  transform: translateY(-100%);
+}
 .slate-app.has-document .workspace-topbar-slot {
   grid-template-rows: 0fr;
   opacity: 0;
@@ -601,8 +607,7 @@ kbd {
 .document-tabs {
   user-select: none;
 }
-.mobile-navigation-slot,
-.drawer-edge {
+.mobile-navigation-slot {
   display: none;
 }
 .workspace-breadcrumb {
@@ -795,7 +800,7 @@ kbd {
     display: none;
   }
 }
-@media (max-width: 960px) {
+@media (max-width: 960px), (pointer: coarse) {
   .slate-app {
     min-height: 0;
   }
@@ -840,27 +845,6 @@ kbd {
   }
   .compact-search {
     display: flex;
-  }
-  .drawer-edge {
-    display: block;
-    position: fixed;
-    z-index: 35;
-    top: calc(60px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-    bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
-    width: 22px;
-    padding: 0;
-    border-radius: 0;
-    touch-action: pan-y;
-  }
-  .drawer-edge-left {
-    left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
-  }
-  .drawer-edge-right {
-    right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
-  }
-  .drawer-edge:focus-visible {
-    background: var(--accent-wash);
-    outline-offset: -2px;
   }
   .workspace-breadcrumb > button:first-of-type:not(.icon-button) {
     color: var(--accent);

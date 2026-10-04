@@ -262,24 +262,6 @@ export default function SlateApp() {
           />
         </MobileDrawer>
       )}
-      {app.compact && (
-        <>
-          <button
-            className="drawer-edge drawer-edge-left"
-            data-drawer-edge="left"
-            aria-label="Show library"
-            onClick={() => app.setSidebar(true)}
-          />
-          {doc && (
-            <button
-              className="drawer-edge drawer-edge-right"
-              data-drawer-edge="right"
-              aria-label="Show document context"
-              onClick={() => app.setContext(true)}
-            />
-          )}
-        </>
-      )}
       <div className="workspace-shell">
         <div className="workspace-topbar-slot" aria-hidden={!!doc} inert={!!doc}>
           <div className="chrome-clip">
@@ -533,175 +515,199 @@ export default function SlateApp() {
             </div>
           ) : (
             <>
-              <div hidden={!!doc} className="library-pane">
-                <Library
-                  documents={app.documents}
-                  folders={app.folders}
-                  view={app.view}
-                  onOpen={app.open}
-                  onFolder={(id) => app.goLibrary("folder:" + id)}
-                  onNewFolder={(parentId) => app.setFolderDialog({ parentId })}
-                  onLibrary={() => app.goLibrary("library")}
-                  onCreate={(notebook) => void app.create(notebook ? "notebook" : "note")}
-                  onRenameDocument={app.setRenameDoc}
-                  onRenameFolder={(folder) => app.setFolderDialog({ folder })}
-                  documentActions={documentActions}
-                  folderActions={folderActions}
-                  onRestore={app.restoreDoc}
-                  onSearch={() => app.setSearch(true)}
-                  onMove={(item, parentId) => void move(item, parentId)}
-                  onRestoreFolder={(folder) => void restoreFolder(folder)}
-                />
-              </div>
-              {doc && (
-                <div className="document-titlebar">
-                  {!app.compact && !app.sidebar && (
-                    <IconButton label="Show library" onClick={() => app.setSidebar(true)}>
-                      <PanelLeftOpen size={19} />
-                    </IconButton>
-                  )}
-                  {app.compact && (
-                    <IconButton label="Back to library" onClick={() => app.goLibrary()}>
-                      <ArrowLeft size={19} />
-                    </IconButton>
-                  )}
-                  <h1 className="sr-only">{doc.title}</h1>
-                  <span className="document-title-icon">
-                    <KindIcon kind={doc.kind} size={18} />
-                  </span>
-                  {app.compact ? (
-                    <span className="document-name">{doc.title}</span>
-                  ) : (
-                    <FileTitle
-                      title={doc.title}
-                      label="Document title"
-                      rename={(value) => workspace.renameDocument(doc.id, value)}
-                    />
-                  )}
-                  <div className="document-title-actions">
-                    <IconButton
-                      label={doc.starred ? "Remove from Starred" : "Add to Starred"}
-                      aria-pressed={doc.starred}
-                      className={doc.starred ? "starred-button" : ""}
-                      onClick={() => app.star(doc)}
-                    >
-                      <Star size={17} fill={doc.starred ? "currentColor" : "none"} />
-                    </IconButton>
-                    <IconButton
-                      label={app.context ? "Hide document context" : "Show document context"}
-                      aria-pressed={app.context}
-                      onClick={() => app.setContext(!app.context)}
-                    >
-                      {app.context ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
-                    </IconButton>
-                    <Menu
-                      trigger={
-                        <IconButton label="Document actions">
-                          <MoreHorizontal size={19} />
+              <div className="navigation-stack">
+                <div
+                  className={"library-pane" + (doc ? " library-behind" : "")}
+                  aria-hidden={!!doc}
+                  inert={!!doc}
+                >
+                  <Library
+                    documents={app.documents}
+                    folders={app.folders}
+                    view={app.view}
+                    onOpen={app.open}
+                    onFolder={(id) => app.goLibrary("folder:" + id)}
+                    onNewFolder={(parentId) => app.setFolderDialog({ parentId })}
+                    onLibrary={() => app.goLibrary("library")}
+                    onCreate={(notebook) => void app.create(notebook ? "notebook" : "note")}
+                    onRenameDocument={app.setRenameDoc}
+                    onRenameFolder={(folder) => app.setFolderDialog({ folder })}
+                    documentActions={documentActions}
+                    folderActions={folderActions}
+                    onRestore={app.restoreDoc}
+                    onSearch={() => app.setSearch(true)}
+                    onMove={(item, parentId) => void move(item, parentId)}
+                    onRestoreFolder={(folder) => void restoreFolder(folder)}
+                  />
+                </div>
+                <div className="document-shell" hidden={!doc}>
+                  {doc && (
+                    <div className="document-titlebar">
+                      {!app.compact && !app.sidebar && (
+                        <IconButton label="Show library" onClick={() => app.setSidebar(true)}>
+                          <PanelLeftOpen size={19} />
                         </IconButton>
-                      }
-                      items={[
-                        ...(app.compact
-                          ? [
-                              {
-                                label: doc.starred ? "Remove from Starred" : "Add to Starred",
-                                icon: <Star size={16} />,
-                                onClick: () => app.star(doc),
-                              },
-                            ]
-                          : []),
-                        ...(!app.compact
-                          ? [
-                              {
-                                label: "Rename file",
-                                icon: <Pencil size={16} />,
-                                onClick: () => app.setRenameDoc(doc),
-                              },
-                            ]
-                          : []),
-                        {
-                          label:
-                            doc.kind === "note"
-                              ? "Export Markdown"
-                              : doc.kind === "notebook"
-                                ? "Export notebook as PDF"
-                                : "Export original file",
-                          icon: <Download size={16} />,
-                          onClick: () => void app.exportSelected(),
-                        },
-                        ...(doc.kind === "pdf"
-                          ? [
-                              {
-                                label: "Export annotated PDF",
-                                icon: <Download size={16} />,
-                                onClick: () => void app.exportSelected(true),
-                              },
-                            ]
-                          : []),
-                        {
-                          label: "Move to folder",
-                          icon: <Folder size={16} />,
-                          onClick: () => app.setMoveDoc(doc),
-                        },
-                        {
-                          label: "Version history",
-                          icon: <History size={16} />,
-                          onClick: () => app.setHistoryDoc(doc),
-                        },
-                        {
-                          label: "Move to Trash",
-                          icon: <Trash2 size={16} />,
-                          danger: true,
-                          separator: true,
-                          onClick: () => app.trash(doc),
-                        },
-                      ]}
-                    />
+                      )}
+                      {app.compact && (
+                        <IconButton label="Back to library" onClick={() => app.goLibrary()}>
+                          <ArrowLeft size={19} />
+                        </IconButton>
+                      )}
+                      <h1 className="sr-only">{doc.title}</h1>
+                      <span className="document-title-icon">
+                        <KindIcon kind={doc.kind} size={18} />
+                      </span>
+                      {app.compact && doc.kind === "note" ? (
+                        <span className="document-name">{doc.title}</span>
+                      ) : (
+                        <FileTitle
+                          title={doc.title}
+                          label="Document title"
+                          rename={(value) => workspace.renameDocument(doc.id, value)}
+                        />
+                      )}
+                      <div className="document-title-actions">
+                        <IconButton
+                          label={doc.starred ? "Remove from Starred" : "Add to Starred"}
+                          aria-pressed={doc.starred}
+                          className={doc.starred ? "starred-button" : ""}
+                          onClick={() => app.star(doc)}
+                        >
+                          <Star size={17} fill={doc.starred ? "currentColor" : "none"} />
+                        </IconButton>
+                        {!app.compact && (
+                          <IconButton
+                            label={app.context ? "Hide document context" : "Show document context"}
+                            aria-pressed={app.context}
+                            onClick={() => app.setContext(!app.context)}
+                          >
+                            {app.context ? (
+                              <PanelRightClose size={18} />
+                            ) : (
+                              <PanelRightOpen size={18} />
+                            )}
+                          </IconButton>
+                        )}
+                        <Menu
+                          trigger={
+                            <IconButton label="Document actions">
+                              <MoreHorizontal size={19} />
+                            </IconButton>
+                          }
+                          items={[
+                            ...(app.compact
+                              ? [
+                                  {
+                                    label: "Browse folders and files",
+                                    icon: <FolderOpen size={16} />,
+                                    onClick: () => app.setSidebar(true),
+                                  },
+                                  {
+                                    label: "View links and outline",
+                                    icon: <PanelRightOpen size={16} />,
+                                    onClick: () => app.setContext(true),
+                                  },
+                                ]
+                              : []),
+                            ...(app.compact
+                              ? [
+                                  {
+                                    label: doc.starred ? "Remove from Starred" : "Add to Starred",
+                                    icon: <Star size={16} />,
+                                    onClick: () => app.star(doc),
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: "Rename file",
+                              icon: <Pencil size={16} />,
+                              onClick: () => app.setRenameDoc(doc),
+                            },
+                            {
+                              label:
+                                doc.kind === "note"
+                                  ? "Export Markdown"
+                                  : doc.kind === "notebook"
+                                    ? "Export notebook as PDF"
+                                    : "Export original file",
+                              icon: <Download size={16} />,
+                              onClick: () => void app.exportSelected(),
+                            },
+                            ...(doc.kind === "pdf"
+                              ? [
+                                  {
+                                    label: "Export annotated PDF",
+                                    icon: <Download size={16} />,
+                                    onClick: () => void app.exportSelected(true),
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: "Move to folder",
+                              icon: <Folder size={16} />,
+                              onClick: () => app.setMoveDoc(doc),
+                            },
+                            {
+                              label: "Version history",
+                              icon: <History size={16} />,
+                              onClick: () => app.setHistoryDoc(doc),
+                            },
+                            {
+                              label: "Move to Trash",
+                              icon: <Trash2 size={16} />,
+                              danger: true,
+                              separator: true,
+                              onClick: () => app.trash(doc),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className={
+                      "document-stage " + (app.context && doc && !app.compact ? "with-context" : "")
+                    }
+                    hidden={!doc}
+                  >
+                    <div className="document-panes">
+                      {app.tabs.map((id) => {
+                        const item = app.documents.find((d) => d.id === id && !d.trashedAt);
+                        return (
+                          item && (
+                            <section
+                              key={id}
+                              className="document-pane"
+                              hidden={id !== app.active}
+                              aria-label={item.title}
+                            >
+                              <DocumentView
+                                doc={item}
+                                active={id === app.active}
+                                editorRef={app.getEditor(id)}
+                                onLink={(name) => void app.openLink(name)}
+                                onTag={(name) => app.goLibrary("tag:" + name)}
+                                onToast={app.notify}
+                                onImage={() => app.imageInput.current?.click()}
+                              />
+                            </section>
+                          )
+                        );
+                      })}
+                    </div>
+                    {doc && app.context && !app.compact && (
+                      <ContextPanel
+                        key={doc.id}
+                        doc={doc}
+                        documents={app.documents}
+                        onOpen={app.open}
+                        onLink={(name) => void app.openLink(name)}
+                        onHeading={(line) => app.getEditor(doc.id).current?.goToLine(line)}
+                        onClose={() => app.setContext(false)}
+                      />
+                    )}
                   </div>
                 </div>
-              )}
-              <div
-                className={
-                  "document-stage " + (app.context && doc && !app.compact ? "with-context" : "")
-                }
-                hidden={!doc}
-              >
-                <div className="document-panes">
-                  {app.tabs.map((id) => {
-                    const item = app.documents.find((d) => d.id === id && !d.trashedAt);
-                    return (
-                      item && (
-                        <section
-                          key={id}
-                          className="document-pane"
-                          hidden={id !== app.active}
-                          aria-label={item.title}
-                        >
-                          <DocumentView
-                            doc={item}
-                            active={id === app.active}
-                            editorRef={app.getEditor(id)}
-                            onLink={(name) => void app.openLink(name)}
-                            onTag={(name) => app.goLibrary("tag:" + name)}
-                            onToast={app.notify}
-                            onImage={() => app.imageInput.current?.click()}
-                          />
-                        </section>
-                      )
-                    );
-                  })}
-                </div>
-                {doc && app.context && !app.compact && (
-                  <ContextPanel
-                    key={doc.id}
-                    doc={doc}
-                    documents={app.documents}
-                    onOpen={app.open}
-                    onLink={(name) => void app.openLink(name)}
-                    onHeading={(line) => app.getEditor(doc.id).current?.goToLine(line)}
-                    onClose={() => app.setContext(false)}
-                  />
-                )}
               </div>
             </>
           )}

@@ -472,6 +472,7 @@
 }
 .drawer-overlay[data-state="closed"] {
   opacity: 0;
+  pointer-events: none;
 }
 @keyframes drawer-left-enter {
   from {
@@ -497,7 +498,7 @@
     outline-color: transparent;
   }
 }
-@media (max-width: 960px) {
+@media (max-width: 960px), (pointer: coarse) {
   .settings-modal.modal-content {
     display: flex;
     flex-direction: column;

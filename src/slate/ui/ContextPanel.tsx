@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link2, ListTree, Info, ArrowUpRight, X } from "lucide-react";
-import { extractLinks, headings, wordCount, type SlateDocument } from "../core/model";
+import { extractLinks, wordCount, type SlateDocument } from "../core/model";
+import { noteHeadings } from "../markdown/metadata";
 import { KindIcon, IconButton, kindName } from "./shared";
 export function ContextPanel({
   doc,
@@ -24,7 +25,7 @@ export function ContextPanel({
       !d.trashedAt &&
       extractLinks(d.content).some((link) => link.toLowerCase() === doc.title.toLowerCase()),
   );
-  const outline = doc.kind === "note" ? headings(doc.content) : [];
+  const outline = doc.kind === "note" ? noteHeadings(doc.content) : [];
   return (
     <aside className="context-panel" aria-label="Document context">
       <div className="context-tabs">

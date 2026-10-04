@@ -112,6 +112,7 @@ export function Modal({
   description,
   children,
   className = "",
+  onInteractOutside,
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -119,12 +120,16 @@ export function Modal({
   description?: string;
   children: ReactNode;
   className?: string;
+  onInteractOutside?: Dialog.DialogContentProps["onInteractOutside"];
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="modal-overlay" />
-        <Dialog.Content className={"modal-content " + className}>
+        <Dialog.Content
+          className={"modal-content " + className}
+          onInteractOutside={onInteractOutside}
+        >
           <div className="modal-heading">
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close asChild>

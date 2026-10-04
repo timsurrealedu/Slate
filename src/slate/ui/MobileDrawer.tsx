@@ -26,11 +26,13 @@ export function MobileDrawer({
     <Dialog.Root open={open || dragging} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
+          style={{ pointerEvents: open || dragging ? "auto" : "none" }}
           className="modal-overlay drawer-overlay"
           data-dragging={dragging}
           data-swipe={swiped.current}
         />
         <Dialog.Content
+          style={{ pointerEvents: open || dragging ? "auto" : "none" }}
           ref={content}
           className={`modal-content mobile-drawer drawer-${side} ${side === "left" ? "navigation-modal" : "context-modal"}`}
           data-dragging={dragging}

@@ -18,6 +18,32 @@ beforeEach(async () => {
   await clearDatabaseForTests();
 });
 describe("local data integrity", () => {
+  it("retains direct and legacy ink plus toolbar preferences through backup recovery", async () => {
+    const doc = makeDocument("notebook", "Pen input", null);
+    const points = [
+      { x: 20, y: 30, p: 0.3, t: 4 },
+      { x: 45, y: 80, p: 0.8, t: 9 },
+    ];
+    doc.pages[0].strokes = [
+      { id: "direct", rendering: "direct", tool: "pen", color: "#aa6467", width: 0.6, points },
+      { id: "legacy", tool: "pen", color: "#385775", width: 1.2, points },
+    ];
+    const preferences = {
+      ...DEFAULT_PREFERENCES,
+      inkColor: "#aa6467",
+      inkWidth: 0.6,
+      inkToolbarPosition: { x: 0.2, y: 0.3 },
+    };
+    const parsed = await parseBackup(await exportWorkspace([doc], [], preferences));
+    expect(parsed.manifest.documents[0].pages[0].strokes).toEqual(doc.pages[0].strokes);
+    expect(parsed.manifest.preferences).toEqual(preferences);
+    const restored = await restoreBackup(parsed);
+    expect(restored.documents[0].pages[0].strokes.map((s) => s.rendering)).toEqual([
+      "direct",
+      undefined,
+    ]);
+    expect(restored.documents[0].pages[0].strokes[0].points).toEqual(points);
+  });
   it("saves atomically and retains an earlier recoverable version", async () => {
     const doc = makeDocument("note", "Physics", null);
     doc.content = "Original lecture";

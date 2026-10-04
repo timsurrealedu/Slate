@@ -197,6 +197,39 @@
 }
 .note-preview .mini-prose h3 {
   font-size: 10px;
+  margin: 8px 0 6px;
+}
+.note-preview .mini-prose h4,
+.note-preview .mini-prose h5,
+.note-preview .mini-prose h6 {
+  font-size: 10px;
+  margin: 8px 0 6px;
+}
+.note-preview .mini-prose .markdown-block > :first-child {
+  margin-top: 0;
+}
+.note-preview .mini-prose hr {
+  margin: 8px 0;
+}
+.note-preview .mini-prose pre,
+.note-preview .mini-prose .prose-callout {
+  margin: 7px 0;
+  padding: 6px 8px;
+}
+.note-preview .mini-prose table {
+  margin: 7px 0;
+  font-size: 9px;
+}
+.note-preview .mini-prose th,
+.note-preview .mini-prose td {
+  padding: 4px 5px;
+}
+.note-preview .mini-prose .image-unavailable {
+  padding: 6px 8px;
+}
+.note-preview .mini-prose .math-block {
+  margin: 7px 0;
+  padding: 0;
 }
 .note-preview .mini-prose p {
   margin: 0 0 7px;
@@ -369,6 +402,8 @@
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  max-height: 35px;
+  overflow: hidden;
   margin-bottom: 8px;
   font-family: var(--ui-font);
 }
@@ -376,9 +411,14 @@
   display: none;
 }
 .preview-tags .tag-link {
+  display: block;
   font-size: 9px;
   padding: 1px 5px;
   min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .note-preview .mini-prose ul,
 .note-preview .mini-prose ol {

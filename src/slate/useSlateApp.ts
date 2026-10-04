@@ -8,6 +8,7 @@ import type { FlexcilReport } from "./import/flexcil/importer";
 import type { MarkdownHandle } from "./markdown/MarkdownEditor";
 import { bindNative, isNative } from "./platform/native";
 import { vault } from "./platform/vault";
+import { useNavigationMotion } from "./ui/useNavigationMotion";
 interface InstallEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: string }>;
@@ -48,6 +49,7 @@ export function useSlateApp() {
     editorRefs = useRef(new Map<string, React.RefObject<MarkdownHandle | null>>()),
     toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const selected = data.documents.find((d) => d.id === active && !d.trashedAt) || null;
+  const motion = useNavigationMotion(active);
   useEffect(() => {
     if (!data.ready) return;
     if (active && !data.documents.some((doc) => doc.id === active && !doc.trashedAt))
@@ -60,7 +62,7 @@ export function useSlateApp() {
   }, [data.ready, data.documents, data.folders, active, view]);
   nativeBack.current = () => {
     if (document.querySelector('[role="dialog"], [role="menu"]')) {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
       return true;
     }
     if (compact && sidebar) {
@@ -118,14 +120,14 @@ export function useSlateApp() {
     });
   }
   useEffect(() => {
-    const narrow = matchMedia("(max-width: 960px)"),
+    const narrow = matchMedia("(max-width: 960px), (pointer: coarse)"),
       contextWidth = matchMedia("(min-width: 1181px)");
-    const adaptContext = () => setContext(contextWidth.matches);
+    const adaptContext = () => setContext(!narrow.matches && contextWidth.matches);
     contextWidth.addEventListener("change", adaptContext);
     const resize = () => {
       setCompact(narrow.matches);
       setSidebar(!narrow.matches);
-      setContext(window.innerWidth > 1180);
+      adaptContext();
     };
     resize();
     narrow.addEventListener("change", resize);
@@ -231,6 +233,7 @@ export function useSlateApp() {
   }, [data.preferences.theme]);
   function open(doc: SlateDocument) {
     if (doc.trashedAt) return;
+    motion.cancel();
     setTabs((current) => (current.includes(doc.id) ? current : [...current, doc.id]));
     setActive(doc.id);
     workspace.update(doc.id, { openedAt: Date.now() });
@@ -241,13 +244,15 @@ export function useSlateApp() {
     history.replaceState(null, "", "#doc=" + doc.id);
   }
   function goLibrary(next = view) {
-    setView(next);
-    setActive(null);
-    if (compact) {
-      setSidebar(false);
-      setContext(false);
-    }
-    history.replaceState(null, "", location.pathname);
+    motion.leave(() => {
+      setView(next);
+      setActive(null);
+      if (compact) {
+        setSidebar(false);
+        setContext(false);
+      }
+      history.replaceState(null, "", location.pathname);
+    });
   }
   function closeTab(id: string) {
     const i = tabs.indexOf(id),

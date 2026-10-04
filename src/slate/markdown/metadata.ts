@@ -1,8 +1,11 @@
 import { load, JSON_SCHEMA } from "js-yaml";
-import type { SlateDocument } from "../core/model";
+import { headings, type SlateDocument } from "../core/model";
 
 export function frontmatter(source: string) {
-  const match = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)^(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/m.exec(source);
+  const match =
+    /^\uFEFF?(?:[ \t]*\r?\n)*---[ \t]*\r?\n([\s\S]*?)^(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/m.exec(
+      source,
+    );
   if (!match || match.index !== 0) return null;
   let properties: Record<string, unknown> = {},
     error = false;
@@ -40,6 +43,33 @@ export function metadataTags(properties: Record<string, unknown>) {
         .filter(Boolean),
     ),
   ];
+}
+
+// Some exported notes keep their tag list as a Markdown heading, with escaped brackets.
+export function tagProperty(source: string) {
+  const match =
+    /^ {0,3}(?:#{1,6}[ \t]+)?tags?:[ \t]*\\?\[([^\r\n]*?)\\?\][ \t]*(?:#+[ \t]*)?(?:\r?\n|$)/i.exec(
+      source,
+    );
+  if (!match) return null;
+  try {
+    const values = load("[" + match[1].replace(/(^|,[ \t]*)#/g, "$1") + "]", {
+      schema: JSON_SCHEMA,
+    });
+    const tags = metadataTags({ tags: values });
+    if (tags.length || !match[1].trim()) return { raw: match[0], tags };
+  } catch {
+    // Keep malformed declarations readable and leave the original source intact.
+  }
+  return null;
+}
+
+export function noteHeadings(source: string) {
+  const lines = source.split("\n");
+  const metadataLines = frontmatter(source)?.lines || 0;
+  return headings(source.replace(/^\uFEFF/, "")).filter(
+    (heading) => heading.line > metadataLines && !tagProperty(lines[heading.line - 1]),
+  );
 }
 
 export function titleHeading(source: string) {
@@ -91,6 +121,7 @@ export function documentTags(doc: SlateDocument) {
     ...new Set([
       ...doc.tags,
       ...metadataTags(metadata?.properties || {}),
+      ...body.split(/\r?\n/).flatMap((line) => tagProperty(line)?.tags || []),
       ...Array.from(body.matchAll(inlineTag), (match) => match[1]),
     ]),
   ];
@@ -98,5 +129,9 @@ export function documentTags(doc: SlateDocument) {
 
 export function previewSource(source: string) {
   // Strip complete metadata before truncating so a long property block cannot consume the preview.
-  return (frontmatter(source)?.body ?? source).trimStart().split("\n").slice(0, 30).join("\n");
+  let body = (frontmatter(source)?.body ?? source).replace(/^\uFEFF?(?:[ \t]*\r?\n)*/, "");
+  // Complete leading comments can be longer than the thumbnail's source budget.
+  const comment = /^ {0,3}(?:%%[\s\S]*?%%|<!--[\s\S]*?-->)[ \t]*(?:\r?\n|$)(?:[ \t]*\r?\n)*/;
+  while (comment.test(body)) body = body.replace(comment, "");
+  return body.split("\n").slice(0, 30).join("\n");
 }

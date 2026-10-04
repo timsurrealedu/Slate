@@ -232,6 +232,7 @@ const stroke = z.object({
   color: z.string().regex(/^#[0-9a-f]{6}$/i),
   width: z.number().min(0.1).max(100),
   points: z.array(point).max(100000),
+  rendering: z.literal("direct").optional(),
 });
 export const docSchema = z.object({
   id: z.string().max(200),
@@ -298,6 +299,19 @@ const manifestSchema = z.object({
     theme: z.enum(["light", "dark", "system"]),
     paper,
     touchInk: z.boolean(),
+    inkColor: z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/i)
+      .default("#385775"),
+    inkWidth: z.number().min(0.6).max(2.4).default(1.2),
+    notebookPages: z.boolean().default(true),
+    inkToolbarPosition: z
+      .object({
+        x: z.number().min(0).max(1),
+        y: z.number().min(0).max(1),
+      })
+      .nullable()
+      .default(null),
     editorSize: z.number().min(14).max(26),
     workspaceName: z.string().max(200),
     lineNumbers: z.boolean().default(false),

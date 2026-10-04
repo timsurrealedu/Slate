@@ -113,11 +113,22 @@ export function EquationComposer({
     [error, setError] = useState("");
   useEffect(() => {
     let live = true;
+    let keyboard: typeof window.mathVirtualKeyboard | undefined;
+    let dialog: HTMLElement | null | undefined;
+    const updateKeyboardHeight = () => {
+      // Geometry events fire while the keyboard is still sliding into view.
+      const height = keyboard?.visible ? keyboard.boundingRect.height : 0;
+      dialog?.style.setProperty("--equation-keyboard-height", `${Math.max(0, height)}px`);
+    };
     void import("mathlive")
       .then(({ MathfieldElement }) => {
         if (!live || !host.current) return;
         MathfieldElement.fontsDirectory = "/mathlive-fonts";
         MathfieldElement.soundsDirectory = null;
+        keyboard = window.mathVirtualKeyboard;
+        dialog = host.current.closest<HTMLElement>(".equation-composer");
+        keyboard.addEventListener("geometrychange", updateKeyboardHeight);
+        window.addEventListener("resize", updateKeyboardHeight);
         const element = new MathfieldElement();
         element.setAttribute("aria-label", "Equation");
         element.mathVirtualKeyboardPolicy = "manual";
@@ -131,6 +142,11 @@ export function EquationComposer({
       );
     return () => {
       live = false;
+      keyboard?.removeEventListener("geometrychange", updateKeyboardHeight);
+      window.removeEventListener("resize", updateKeyboardHeight);
+      // MathLive's manual keyboard is global and outlives a disconnected field.
+      keyboard?.hide({ animate: false });
+      dialog?.style.removeProperty("--equation-keyboard-height");
       field.current?.remove();
       field.current = null;
     };
@@ -156,6 +172,12 @@ export function EquationComposer({
       title="Insert equation"
       description="Type as you would on paper: / makes a fraction, ^ makes a power, and sqrt or pi become symbols. Arrow keys move between slots."
       className="equation-composer"
+      onInteractOutside={(event) => {
+        const target = event.detail.originalEvent.target;
+        // MathLive docks its keyboard outside Radix's dialog portal.
+        if (target instanceof Element && target.closest(".ML__keyboard, .MLK__variant-panel"))
+          event.preventDefault();
+      }}
     >
       <div className="equation-field" ref={host} />
       <div className="equation-templates">

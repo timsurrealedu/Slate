@@ -12,7 +12,7 @@ export default defineConfig({
     viewport: { width: 1440, height: 960 },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    launchOptions: { args: ["--no-sandbox"] },
+    launchOptions: { args: ["--no-sandbox"], channel: process.env.SLATE_TEST_BROWSER_CHANNEL },
   },
   reporter: [["list"], ["json", { outputFile: "artifacts/browser-results.json" }]],
   outputDir: "artifacts/browser",

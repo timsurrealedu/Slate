@@ -8,6 +8,8 @@ const profile = mkdtempSync(join(tmpdir(), "slate-desktop-test-"));
 const backup = join(profile, "export.slate.zip");
 const errors = [];
 let instance;
+const titleField = (page) =>
+  page.locator('[aria-label="Document title"]:visible, [aria-label="File title"]:visible').first();
 async function launch() {
   instance = await _electron.launch({
     executablePath:
@@ -53,11 +55,9 @@ try {
   const importedId = (await latest(page)).id;
   await page.keyboard.press("Control+n");
   await expect.poll(async () => (await latest(page))?.id).not.toBe(importedId);
-  await expect(page.getByLabel("Document title", { exact: true })).toHaveValue(
-    (await latest(page)).title,
-  );
-  await page.getByLabel("Document title", { exact: true }).fill("Native persistence");
-  await page.getByLabel("Document title", { exact: true }).press("Enter");
+  await expect(titleField(page)).toHaveValue((await latest(page)).title);
+  await titleField(page).fill("Native persistence");
+  await titleField(page).press("Enter");
   await expect.poll(async () => (await latest(page))?.title).toBe("Native persistence");
   // Commit the hidden native window's new tab layout before pointer actions.
   await page.screenshot({ path: "artifacts/desktop-native-heading.png" });
@@ -70,14 +70,43 @@ try {
   // Close immediately after editing, then relaunch into the same isolated native profile.
   await closeNormally();
   page = await launch();
-  await expect(page.getByLabel("Document title", { exact: true })).toHaveValue(
-    "Native persistence",
-  );
+  await expect(titleField(page)).toHaveValue("Native persistence");
   await expect(page).toHaveURL(/#doc=.+$/);
   expect((await latest(page)).content).toBe(text);
+  const formatting = page.getByRole("button", { name: "Formatting", exact: true });
+  if (await formatting.isVisible()) await formatting.click();
+  await page.getByRole("button", { name: "Insert equation", exact: true }).click();
+  await expect(page.locator("math-field")).toBeVisible();
+  await page.locator('math-field [part="virtual-keyboard-toggle"]').click();
+  await expect(page.locator(".ML__keyboard.is-visible")).toHaveCount(1);
+  for (const character of "123+45=168") {
+    const id = await page
+      .locator(".MLK__layer.is-visible .MLK__keycap")
+      .evaluateAll(
+        (elements, value) =>
+          elements.find(
+            (element) => window.mathVirtualKeyboard.getKeycap(element.id)?.latex === value,
+          )?.id,
+        character,
+      );
+    expect(id).toBeTruthy();
+    await page.locator("#" + id).click();
+    await expect(page.getByRole("dialog", { name: "Insert equation", exact: true })).toBeVisible();
+  }
+  await expect
+    .poll(() => page.locator("math-field").evaluate((element) => element.value))
+    .toBe("123+45=168");
+  const insertEquation = page
+    .getByRole("dialog", { name: "Insert equation", exact: true })
+    .getByRole("button", { name: "Insert equation", exact: true });
+  await insertEquation.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `artifacts/final-${process.platform}-equation.png` });
+  await insertEquation.click();
+  await expect(page.locator(".ML__keyboard")).toHaveCount(0);
+  await expect.poll(async () => (await latest(page))?.content).toContain("$$\n123+45=168\n$$");
   await page.keyboard.press("Control+Shift+n");
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
-  await page.getByRole("button", { name: "Pen thickness", exact: true }).click();
+  await page.getByRole("button", { name: "Pen (P)", exact: true }).click();
   await page.getByRole("button", { name: "Fine", exact: true }).click();
   await page.keyboard.press("Escape");
   await draw(page);
@@ -92,7 +121,8 @@ try {
   await instance.evaluate(({ session }, file) => {
     session.defaultSession.on("will-download", (_event, item) => item.setSavePath(file));
   }, backup);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.keyboard.press("Control+k");
+  await page.getByRole("option", { name: "Open settings Command", exact: true }).click();
   await page.getByRole("button", { name: "Export workspace", exact: true }).click();
   await expect
     .poll(() => {
@@ -149,6 +179,7 @@ try {
         launch: "pass",
         vaultMenuImport: "pass",
         unifiedHeading: "pass",
+        equationKeyboard: "pass",
         zoom500AndFinePen: "pass",
         immediateCloseSave: "pass",
         relaunch: "pass",

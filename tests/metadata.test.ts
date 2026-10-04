@@ -8,6 +8,8 @@ import {
   titleHeading,
   renameHeading,
   withoutTitleHeading,
+  tagProperty,
+  noteHeadings,
 } from "../src/slate/markdown/metadata";
 import { visibleWorkspace } from "../src/slate/core/folders";
 
@@ -58,6 +60,65 @@ it("finds metadata and inline tags while excluding code, links and URLs", () => 
   doc.content =
     "---\ntags: [moc, study/math]\n---\n# Heading\nUse #ideas and #study/math and #日本語.\n`#code`\nhttps://site.test/#anchor\n[Link](#target)\n```js\n#hidden\n```\n";
   expect(documentTags(doc)).toEqual(["saved", "moc", "study/math", "ideas", "日本語"]);
+});
+
+it("recognizes padded YAML metadata without changing source offsets or hiding body separators", () => {
+  const source =
+    "\uFEFF\r\n \t\r\n---\r\ntags: [study, uas]\r\n---\r\n\r\n# Lesson\r\n\r\nBody\r\n---\r\n";
+  const metadata = frontmatter(source)!;
+  expect(metadataTags(metadata.properties)).toEqual(["study", "uas"]);
+  expect(metadata.lines).toBe(5);
+  expect(source.slice(metadata.raw.length)).toBe(metadata.body);
+  expect(titleHeading(source)?.title).toBe("Lesson");
+  expect(previewSource(source)).toBe("# Lesson\r\n\r\nBody\r\n---\r\n");
+  expect(frontmatter("A paragraph\n\n---\ntags: [study]\n---")).toBeNull();
+});
+
+it("finds exported body tag lists with headings or escaped brackets while excluding examples", () => {
+  for (const declaration of [
+    "tags: [latihan, uas, study/math]",
+    "## tags: \\[latihan, uas, study/math]",
+    "### Tags: \\[latihan, uas, study/math\\] ###",
+    'tag: ["#latihan", "uas", "study/math"]',
+    "tags: [#latihan, #uas, #study/math]",
+  ]) {
+    expect(tagProperty(declaration)?.tags).toEqual(["latihan", "uas", "study/math"]);
+    const doc = makeDocument("note", "Practice", null);
+    doc.content = "\n***\n\n" + declaration + "\n\n# Practice\n\nTagged #uas.\n";
+    expect(documentTags(doc)).toEqual(["latihan", "uas", "study/math"]);
+  }
+  for (const text of [
+    "Tags are useful",
+    "A tags: [study] example",
+    "## Tags: useful ideas",
+    "    tags: [code]",
+    "tags: [unclosed",
+  ])
+    expect(tagProperty(text)).toBeNull();
+  const doc = makeDocument("note", "Examples", null);
+  doc.content =
+    "```md\ntags: [fenced]\n```\n\n`tags: [inline]`\n\n%% tags: [comment] %%\n\n<!-- tags: [html] -->";
+  expect(documentTags(doc)).toEqual([]);
+});
+
+it("previews skip long leading comments and preserve indented code", () => {
+  const comments = [
+    "<!-- " + "hidden\n".repeat(40) + "-->\n",
+    "%%\n" + "hidden\n".repeat(40) + "%%\n",
+  ];
+  expect(previewSource("\n" + comments.join("\n") + "\n# Visible\n\nBody")).toBe(
+    "# Visible\n\nBody",
+  );
+  expect(previewSource("\n\n    tags: [code]\n")).toBe("    tags: [code]\n");
+});
+
+it("keeps properties out of the outline while preserving real heading source lines", () => {
+  const source =
+    "\uFEFF---\n# YAML comment\n---\n\n## tags: \\[uas, study]\n# Lesson\n```md\n## Code\n```\n## Real section\n";
+  expect(noteHeadings(source)).toEqual([
+    { level: 1, text: "Lesson", line: 6 },
+    { level: 2, text: "Real section", line: 10 },
+  ]);
 });
 
 it("hides an entire local subtree including descendants with ordinary names", () => {

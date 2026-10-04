@@ -226,3 +226,15 @@ Folders expand inside the rail. The library browses one directory at a time, wit
 - Apply the workspace theme to page paper.
 - Turn document-type metadata into a marketing kicker.
 - Animate ink sampling or rendering.
+
+## Touch notebooks
+
+Touch screens, including wide tablets, open library and document context with horizontal swipes across note controls, clear of the operating system's Back edges. Do not add persistent handles along the page or library. The document menu provides accessible alternatives; the page panel keeps its own toggle. Android fills the screen in immersive mode while respecting display cutouts.
+
+Opening notes pushes workspace controls upward. Returning to the library preserves continuity with a short departure; Android predictive Back follows gesture progress and supports cancellation. Reduced motion removes spatial transitions. Notebook pinches transform the existing paper once per animation frame, keep the focal point, and resize the drawing buffer after release. Desktop wheel zoom follows the pointer. Open notebook titles remain editable in the existing title bar. Phone Markdown uses one compact mode row, 32px selection marks within 44px tap targets, and floating reading statistics.
+
+Equation keyboard taps belong to the open composer even when the keyboard is docked outside its popup. Keep the composer above the keyboard and clean up the keyboard on insertion, cancellation and dismissal.
+
+The ink toolbar stays on one row with a single color swatch and a drag grip. Tap an already selected pen or highlighter to choose thickness; tap the swatch for the palette. Selection transforms and touch drawing live in Ink options. On phones, selection, panning and redo are also available there. Position, width, color and page-panel visibility are saved preferences.
+
+New ink follows recorded pen samples with pressure-sensitive width and rounded joins, without path stabilization. Drawing never reshapes earlier segments. Legacy ink retains its original rendering.

@@ -95,7 +95,10 @@ test("mobile note chrome recedes and both drawers track touch position before re
   await expect(page.locator(".mobile-navigation")).toBeHidden();
   await page.getByRole("button", { name: "Document actions", exact: true }).click();
   expect(await page.getByRole("menuitem").allTextContents()).toEqual([
+    "Browse folders and files",
+    "View links and outline",
     "Remove from Starred",
+    "Rename file",
     "Export Markdown",
     "Move to folder",
     "Version history",
@@ -103,7 +106,7 @@ test("mobile note chrome recedes and both drawers track touch position before re
   ]);
   await page.keyboard.press("Escape");
   const touch = await context.newCDPSession(page);
-  const send = (type: string, x?: number, y = 300) =>
+  const send = (type: string, x?: number, y = 72) =>
     touch.send("Input.dispatchTouchEvent", {
       type,
       touchPoints: x === undefined ? [] : [{ x, y }],
@@ -115,14 +118,14 @@ test("mobile note chrome recedes and both drawers track touch position before re
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         ),
     );
-  await send("touchStart", 10);
-  await send("touchMove", 90);
+  await send("touchStart", 50);
+  await send("touchMove", 130);
   await frame();
   const library = page.getByRole("dialog", { name: "Library", exact: true });
   const first = (await library.boundingBox())!;
   expect(first.x).toBeLessThan(-100);
   expect(first.x + first.width).toBeGreaterThan(40);
-  await send("touchMove", 170);
+  await send("touchMove", 210);
   await frame();
   const second = (await library.boundingBox())!;
   expect(second.x - first.x).toBeCloseTo(80, 0);
@@ -133,8 +136,8 @@ test("mobile note chrome recedes and both drawers track touch position before re
   await send("touchMove", 30);
   await send("touchEnd");
   await expect(library).toHaveCount(0);
-  await send("touchStart", 380);
-  await send("touchMove", 275);
+  await send("touchStart", 340);
+  await send("touchMove", 235);
   await frame();
   const documentContext = page.getByRole("dialog", { name: "Document context", exact: true });
   const right = (await documentContext.boundingBox())!;
@@ -148,8 +151,8 @@ test("mobile note chrome recedes and both drawers track touch position before re
   await page.screenshot({ path: "artifacts/behavior-mobile-context.png" });
   await page.getByRole("button", { name: "Close document context", exact: true }).click();
   await expect(documentContext).toHaveCount(0);
-  await send("touchStart", 10);
-  await send("touchMove", 75);
+  await send("touchStart", 50);
+  await send("touchMove", 115);
   await send("touchCancel");
   await expect(library).toHaveCount(0);
   await page.getByRole("button", { name: "Back to library", exact: true }).click();
@@ -226,7 +229,7 @@ test("pen levels use even increments and vector paper and ink remain present at 
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
   for (const [index, level] of ["Fine", "Medium", "Bold", "Heavy"].entries()) {
-    await page.getByRole("button", { name: "Pen thickness", exact: true }).click();
+    await page.getByRole("button", { name: "Pen (P)", exact: true }).click();
     await page.getByRole("button", { name: level, exact: true }).click();
     await page.keyboard.press("Escape");
     await draw(page, { x: 120, y: 110 + index * 45 }, { x: 240, y: 130 + index * 45 });

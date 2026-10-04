@@ -1,10 +1,46 @@
 import { getStroke } from "perfect-freehand";
-import type { Page, Stroke } from "../core/model";
+import type { Page, Point, Stroke } from "../core/model";
 const paths = new WeakMap<Stroke, { count: number; width: number; d: string; path?: Path2D }>();
+function radius(stroke: Stroke, point: Point) {
+  return stroke.tool === "highlighter" ? stroke.width / 2 : stroke.width * (0.65 + 0.7 * point.p);
+}
+function directPath(stroke: Stroke, start: number, d: string) {
+  // Rounded segments follow recorded samples exactly. Appending ink never moves earlier ink.
+  for (let i = start; i < stroke.points.length; i++) {
+    const point = stroke.points[i],
+      r = radius(stroke, point),
+      previous = stroke.points[i - 1];
+    d += `M${point.x - r},${point.y}a${r},${r} 0 1,0 ${r * 2},0a${r},${r} 0 1,0 ${-r * 2},0Z`;
+    if (!previous) continue;
+    const dx = point.x - previous.x,
+      dy = point.y - previous.y,
+      distance = Math.hypot(dx, dy);
+    if (!distance) continue;
+    const nx = -dy / distance,
+      ny = dx / distance,
+      before = radius(stroke, previous);
+    d +=
+      `M${previous.x + nx * before},${previous.y + ny * before}` +
+      `L${point.x + nx * r},${point.y + ny * r}` +
+      `L${point.x - nx * r},${point.y - ny * r}` +
+      `L${previous.x - nx * before},${previous.y - ny * before}Z`;
+  }
+  return d;
+}
 export function strokePath(stroke: Stroke) {
   if (!stroke.points.length) return "";
   let cached = paths.get(stroke);
   if (!cached || cached.count !== stroke.points.length || cached.width !== stroke.width) {
+    if (stroke.rendering === "direct") {
+      const append = cached && cached.width === stroke.width && cached.count < stroke.points.length;
+      cached = {
+        count: stroke.points.length,
+        width: stroke.width,
+        d: directPath(stroke, append ? cached!.count : 0, append ? cached!.d : ""),
+      };
+      paths.set(stroke, cached);
+      return cached.d;
+    }
     const outline = getStroke(
       stroke.points.map((p) => [p.x, p.y, p.p]),
       {

@@ -3,9 +3,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { ready, latest, draw, source } from "./helpers";
 
 async function vim(page: Page) {
+  if (!(await page.getByRole("button", { name: "Settings", exact: true }).isVisible())) {
+    await page.getByRole("button", { name: "Document actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Browse folders and files", exact: true }).click();
+  }
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Vim keybindings", { exact: true }).check();
   await page.keyboard.press("Escape");
+  if (await page.getByRole("dialog", { name: "Library", exact: true }).isVisible())
+    await page.keyboard.press("Escape");
 }
 async function ex(page: Page, command: string) {
   await page.keyboard.type(":" + command);
@@ -174,12 +180,13 @@ test("Selection scales and rotates with reversible saved geometry", async ({ pag
   const before = (await latest(page)).pages[0].strokes[0];
   await page.getByRole("button", { name: "Select ink (V)", exact: true }).click();
   await draw(page, { x: 80, y: 80 }, { x: 380, y: 220 });
-  await page.getByRole("button", { name: "Transform selected ink", exact: true }).click();
-  await page.getByRole("button", { name: "Make larger", exact: true }).click();
+  await page.getByRole("button", { name: "Ink options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Make selection larger", exact: true }).click();
   await expect
     .poll(async () => (await latest(page))?.pages[0].strokes[0].width)
     .toBeCloseTo(before.width * 1.1);
-  await page.getByRole("button", { name: /Rotate right/ }).click();
+  await page.getByRole("button", { name: "Ink options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Rotate selection right", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect
     .poll(async () => (await latest(page))?.pages[0].strokes[0].points[0].y)
@@ -209,8 +216,9 @@ test("Two fingers pan while finger ink is on; double two-finger tap undoes witho
   await page.getByRole("button", { name: "New note", exact: true }).tap();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
   await draw(page, { x: 40, y: 120 }, { x: 220, y: 170 });
+  await page.getByRole("button", { name: "Ink options", exact: true }).tap();
   await page
-    .getByRole("button", { name: "Touch pans. Switch to touch drawing", exact: true })
+    .getByRole("menuitem", { name: "Touch pans. Switch to touch drawing", exact: true })
     .tap();
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);
   await page.getByRole("button", { name: "Zoom in", exact: true }).tap();

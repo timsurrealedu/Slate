@@ -20,6 +20,7 @@ export interface Stroke {
   color: string;
   width: number;
   points: Point[];
+  rendering?: "direct";
 }
 export interface Page {
   id: string;
@@ -64,6 +65,10 @@ export interface Preferences {
   theme: Theme;
   paper: Paper;
   touchInk: boolean;
+  inkColor: string;
+  inkWidth: number;
+  inkToolbarPosition: { x: number; y: number } | null;
+  notebookPages: boolean;
   editorSize: number;
   workspaceName: string;
   lineNumbers: boolean;
@@ -85,6 +90,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   theme: "light",
   paper: DEFAULT_PAPER,
   touchInk: false,
+  inkColor: "#385775",
+  inkWidth: 1.2,
+  inkToolbarPosition: null,
+  notebookPages: true,
   editorSize: 18,
   workspaceName: "My workspace",
   lineNumbers: false,
