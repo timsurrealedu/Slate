@@ -1,0 +1,325 @@
+{
+  "node_count": 1120,
+  "raw_edge_count": 2391,
+  "non_object_edges": 0,
+  "missing_endpoint_edges": 0,
+  "dangling_endpoint_edges": 293,
+  "self_loop_edges": 0,
+  "valid_candidate_edges": 2098,
+  "exact_duplicate_edges": 2,
+  "directed_unique_endpoint_pairs": 2075,
+  "directed_same_endpoint_collapsed_edges": 23,
+  "undirected_unique_endpoint_pairs": 2074,
+  "undirected_same_endpoint_collapsed_edges": 24,
+  "same_endpoint_group_count": 13,
+  "relation_variant_groups": 3,
+  "source_file_variant_groups": 0,
+  "source_location_variant_groups": 6,
+  "context_variant_groups": 2,
+  "post_build_graph_type": "Graph",
+  "post_build_node_count": 1120,
+  "post_build_edge_count": 2074,
+  "post_build_error": "",
+  "producer_suppression": {
+    "path": "graphify/extract.py",
+    "total_sites": 10,
+    "sites": [
+      {
+        "line": 958,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 1108,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 1110,
+        "name": "seen_doc_refs",
+        "tuple_arity": 0,
+        "sample": "seen_doc_refs: set[str] = set()"
+      },
+      {
+        "line": 1533,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2002,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 2925,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3033,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3112,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3607,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3608,
+        "name": "seen_edges",
+        "tuple_arity": 4,
+        "sample": "seen_edges: set[tuple[str, str, str, str | None]] = set()"
+      }
+    ],
+    "error": ""
+  },
+  "examples": [
+    {
+      "source": "src_slate_markdown_render",
+      "target": "src_slate_markdown_render_tokenizer",
+      "edge_count": 8,
+      "relations": [
+        "contains"
+      ],
+      "source_files": [
+        "src/slate/markdown/render.ts"
+      ],
+      "source_locations": [
+        "L103",
+        "L113",
+        "L123",
+        "L136",
+        "L148",
+        "L173",
+        "L187",
+        "L88"
+      ],
+      "contexts": [
+        ""
+      ]
+    },
+    {
+      "source": "src_slate_markdown_render",
+      "target": "src_slate_markdown_render_renderer",
+      "edge_count": 5,
+      "relations": [
+        "contains"
+      ],
+      "source_files": [
+        "src/slate/markdown/render.ts"
+      ],
+      "source_locations": [
+        "L128",
+        "L155",
+        "L177",
+        "L191",
+        "L92"
+      ],
+      "contexts": [
+        ""
+      ]
+    },
+    {
+      "source": "src_slate_markdown_render",
+      "target": "src_slate_markdown_render_start",
+      "edge_count": 3,
+      "relations": [
+        "contains"
+      ],
+      "source_files": [
+        "src/slate/markdown/render.ts"
+      ],
+      "source_locations": [
+        "L145",
+        "L170",
+        "L184"
+      ],
+      "contexts": [
+        ""
+      ]
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_slatevaultplugin_slatevaultplugin_children",
+      "target": "uri",
+      "edge_count": 2,
+      "relations": [
+        "references"
+      ],
+      "source_files": [
+        "android/app/src/main/java/app/slate/workspace/SlateVaultPlugin.java"
+      ],
+      "source_locations": [
+        "L77"
+      ],
+      "contexts": [
+        "parameter_type"
+      ]
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_slatevaultplugin_slatevaultplugin_find",
+      "target": "uri",
+      "edge_count": 2,
+      "relations": [
+        "references"
+      ],
+      "source_files": [
+        "android/app/src/main/java/app/slate/workspace/SlateVaultPlugin.java"
+      ],
+      "source_locations": [
+        "L89"
+      ],
+      "contexts": [
+        "parameter_type",
+        "return_type"
+      ]
+    }
+  ],
+  "unresolved_reference_examples": [
+    {
+      "source": "android_app_src_androidtest_java_com_getcapacitor_myapp_exampleinstrumentedtest",
+      "target": "assert",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_androidtest_java_com_getcapacitor_myapp_exampleinstrumentedtest",
+      "target": "context",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_androidtest_java_com_getcapacitor_myapp_exampleinstrumentedtest",
+      "target": "androidjunit4",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_androidtest_java_com_getcapacitor_myapp_exampleinstrumentedtest",
+      "target": "instrumentationregistry",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "build",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "view",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "window",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "windowmanager",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "webview",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "backeventcompat",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "onbackpressedcallback",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "android_app_src_main_java_app_slate_workspace_mainactivity",
+      "target": "viewcompat",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/app/slate/workspace/MainActivity.java",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    }
+  ]
+}

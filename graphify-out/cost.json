@@ -1,0 +1,16 @@
+{
+  "runs": [
+    {
+      "date": "2026-10-04T12:36:31.632752+00:00",
+      "files": 169,
+      "input_tokens": null,
+      "output_tokens": null,
+      "usage_reported": false
+    }
+  ],
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "totals_include_reported_usage_only": true,
+  "unknown_usage_runs": 1,
+  "note": "Actual semantic token usage is unavailable from session-agent tools; numeric totals include reported usage only."
+}
