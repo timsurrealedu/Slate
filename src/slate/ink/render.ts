@@ -49,14 +49,13 @@ function directPath(
   }
   return { d, pressure };
 }
-export function drawLiveStroke(
-  ctx: CanvasRenderingContext2D,
+function appendCanvasStroke(
+  ctx: CanvasPath,
   stroke: Stroke,
   start: number,
   pressure = stroke.points[0].p,
 ) {
   let before = radius(stroke, pressure);
-  ctx.beginPath();
   for (let i = start; i < stroke.points.length; i++) {
     const point = stroke.points[i],
       previous = stroke.points[i - 1];
@@ -81,9 +80,19 @@ export function drawLiveStroke(
     }
     before = r;
   }
+  return pressure;
+}
+export function drawLiveStroke(
+  ctx: CanvasRenderingContext2D,
+  stroke: Stroke,
+  start: number,
+  pressure = stroke.points[0].p,
+) {
+  ctx.beginPath();
+  const next = appendCanvasStroke(ctx, stroke, start, pressure);
   ctx.fillStyle = stroke.color;
   ctx.fill();
-  return pressure;
+  return next;
 }
 export function strokePathChunks(stroke: Stroke): readonly string[] {
   if (!stroke.points.length) return [];
@@ -153,9 +162,13 @@ export function strokePath(stroke: Stroke) {
 export function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
   let cached = canvasPaths.get(stroke);
   if (!cached || cached.count !== stroke.points.length || cached.width !== stroke.width) {
-    const d = strokePath(stroke);
-    if (!d) return;
-    cached = { count: stroke.points.length, width: stroke.width, path: new Path2D(d) };
+    if (!stroke.points.length) return;
+    let path: Path2D;
+    if (stroke.rendering === "precise") {
+      path = new Path2D();
+      appendCanvasStroke(path, stroke, 0);
+    } else path = new Path2D(strokePath(stroke));
+    cached = { count: stroke.points.length, width: stroke.width, path };
     canvasPaths.set(stroke, cached);
   }
   ctx.save();

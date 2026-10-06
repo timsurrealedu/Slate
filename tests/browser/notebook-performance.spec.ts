@@ -2,6 +2,221 @@ import { test, expect, type Page, type CDPSession } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { ready, latest } from "./helpers";
 
+for (const stream of [
+  "missing-down",
+  "missing-up",
+  "repeated-down",
+  "capture-failure",
+  "barrel-held",
+] as const) {
+  test(`pen contact survives ${stream} without losing or joining letters`, async ({ page }) => {
+    await loadedNotebook(page, 0);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const expected = await page.locator(".ink-canvas:visible").evaluate((element, stream) => {
+      const canvas = element as HTMLCanvasElement,
+        b = canvas.getBoundingClientRect();
+      if (stream !== "capture-failure") canvas.setPointerCapture = () => {};
+      let time = performance.now();
+      const make = (type: string, x: number, y: number, buttons = 1, pressure = 0.5) => {
+        const e = new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "pen",
+          pointerId: 9876,
+          clientX: b.left + x,
+          clientY: b.top + y,
+          buttons,
+          pressure,
+        });
+        Object.defineProperty(e, "timeStamp", { value: ++time });
+        return e;
+      };
+      if (stream !== "missing-down")
+        canvas.dispatchEvent(
+          make(
+            "pointerdown",
+            160,
+            160,
+            stream === "barrel-held" ? 2 : 1,
+            stream === "barrel-held" ? 0 : 0.5,
+          ),
+        );
+      const first = [
+        make("pointermove", 160, 160),
+        make("pointermove", 165, 150),
+        make("pointermove", 175, 155),
+      ];
+      const parent = make("pointerrawupdate", 500, 500);
+      Object.defineProperty(parent, "getCoalescedEvents", { value: () => first });
+      canvas.dispatchEvent(parent);
+      if (stream === "missing-up" || stream === "barrel-held")
+        canvas.dispatchEvent(make("pointermove", 400, 400, stream === "barrel-held" ? 2 : 0, 0));
+      else if (stream !== "repeated-down")
+        document.body.dispatchEvent(make("pointerup", 175, 155, 0, 0));
+      if (stream !== "missing-down" && stream !== "capture-failure") {
+        canvas.dispatchEvent(
+          make(stream === "repeated-down" ? "pointerdown" : "pointermove", 220, 160),
+        );
+        document.body.dispatchEvent(make("pointermove", 230, 170));
+        document.body.dispatchEvent(make("pointerup", 230, 170, 0, 0));
+      }
+      return {
+        count: stream === "missing-down" || stream === "capture-failure" ? 1 : 2,
+        scaleX: 794 / b.width,
+        scaleY: 1123 / b.height,
+      };
+    }, stream);
+    await expect
+      .poll(async () => (await latest(page)).pages[0].strokes.length)
+      .toBe(expected.count);
+    const strokes = (await latest(page)).pages[0].strokes;
+    for (const [i, positions] of [
+      [
+        [160, 160],
+        [165, 150],
+        [175, 155],
+      ],
+      [
+        [220, 160],
+        [230, 170],
+      ],
+    ]
+      .slice(0, expected.count)
+      .entries()) {
+      expect(strokes[i].points).toHaveLength(positions.length);
+      positions.forEach(([x, y], j) => {
+        expect(strokes[i].points[j].x / expected.scaleX).toBeCloseTo(x, 7);
+        expect(strokes[i].points[j].y / expected.scaleY).toBeCloseTo(y, 7);
+      });
+    }
+    expect(errors).toEqual([]);
+    await page.reload();
+    expect((await latest(page)).pages[0].strokes).toEqual(strokes);
+  });
+}
+
+test("active canvas inking avoids hidden SVG work and publishes vectors after settling", async ({
+  page,
+}) => {
+  await loadedNotebook(page, 0);
+  const session = await page.context().newCDPSession(page);
+  const { canvas, box } = await startPen(page, session);
+  const report = await canvas.evaluate(async (element) => {
+    const set = SVGElement.prototype.setAttribute;
+    let paths = 0;
+    SVGElement.prototype.setAttribute = function (name, value) {
+      if (name === "d" && this.closest(".ink-vector, .ink-live-vector")) paths++;
+      return set.call(this, name, value);
+    };
+    const id = Number((element as HTMLElement).dataset.pointer),
+      b = element.getBoundingClientRect();
+    const times: number[] = [];
+    let previous = performance.now();
+    for (let frame = 0; frame < 40; frame++) {
+      await new Promise(requestAnimationFrame);
+      const now = performance.now();
+      times.push(now - previous);
+      previous = now;
+      for (let j = 0; j < 16; j++)
+        element.dispatchEvent(
+          new PointerEvent("pointerrawupdate", {
+            bubbles: true,
+            pointerType: "pen",
+            pointerId: id,
+            buttons: 1,
+            pressure: 0.5,
+            clientX: b.left + 160 + frame * 2 + j / 8,
+            clientY: b.top + 160 + Math.sin((frame * 16 + j) / 9) * 10,
+          }),
+        );
+    }
+    SVGElement.prototype.setAttribute = set;
+    times.sort((a, b) => a - b);
+    return { paths, p95: times[Math.floor(times.length * 0.95)] };
+  });
+  await writeFile("artifacts/ink-contact-hot-path.json", JSON.stringify(report, null, 2));
+  expect(report.paths).toBe(0);
+  await lift(session, box.x + 241, box.y + 165);
+  await expect.poll(async () => (await latest(page)).pages[0].strokes.length).toBe(1);
+  await expect(page.locator(".ink-vector > g:not(.ink-live) path").first()).toBeAttached();
+  await session.detach();
+});
+
+test("losing pointer capture during contact keeps one continuous stroke", async ({ page }) => {
+  await loadedNotebook(page, 0);
+  const session = await page.context().newCDPSession(page);
+  const { canvas, box } = await startPen(page, session);
+  await canvas.evaluate((element) => {
+    const b = element.getBoundingClientRect(),
+      id = Number((element as HTMLElement).dataset.pointer);
+    for (const [type, x, y] of [
+      ["pointermove", 170, 150],
+      ["lostpointercapture", 170, 150],
+      ["pointermove", 180, 160],
+    ] as const)
+      element.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: id,
+          pointerType: "pen",
+          clientX: b.left + x,
+          clientY: b.top + y,
+          pressure: 0.5,
+          buttons: 1,
+        }),
+      );
+  });
+  await lift(session, box.x + 180, box.y + 160);
+  await expect.poll(async () => (await latest(page)).pages[0].strokes.length).toBe(1);
+  expect((await latest(page)).pages[0].strokes[0].points).toHaveLength(3);
+  await session.detach();
+});
+
+test("distinct coordinates sharing a hardware timestamp survive raw overlap", async ({ page }) => {
+  await loadedNotebook(page, 0);
+  const session = await page.context().newCDPSession(page);
+  const { canvas, box } = await startPen(page, session);
+  await canvas.evaluate((element) => {
+    const b = element.getBoundingClientRect(),
+      id = Number((element as HTMLElement).dataset.pointer);
+    const time = performance.now() + 1;
+    const make = (type: string, x: number, y: number) => {
+      const e = new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "pen",
+        pointerId: id,
+        buttons: 1,
+        pressure: 0.5,
+        clientX: b.left + x,
+        clientY: b.top + y,
+      });
+      Object.defineProperty(e, "timeStamp", { value: time });
+      return e;
+    };
+    const points = [
+      make("pointerrawupdate", 160, 160),
+      make("pointerrawupdate", 165, 150),
+      make("pointerrawupdate", 175, 155),
+    ];
+    const raw = make("pointerrawupdate", 175, 155);
+    Object.defineProperty(raw, "getCoalescedEvents", { value: () => points });
+    element.dispatchEvent(raw);
+    const replay = make("pointermove", 175, 155);
+    Object.defineProperty(replay, "getCoalescedEvents", { value: () => points.slice(1) });
+    element.dispatchEvent(replay);
+    element.dispatchEvent(make("pointermove", 178, 160));
+  });
+  await lift(session, box.x + 178, box.y + 160);
+  await expect.poll(async () => (await latest(page)).pages[0].strokes.length).toBe(1);
+  const doc = await latest(page),
+    points = doc.pages[0].strokes[0].points;
+  expect(points).toHaveLength(4);
+  expect(points[1].t).toBe(points[3].t);
+  expect(points[3].x).toBeCloseTo((178 * doc.pages[0].width) / box.width, 7);
+  await session.detach();
+});
+
 async function loadedNotebook(page: Page, count: number) {
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
@@ -336,11 +551,22 @@ test("fast tiny loops retain every raw and coalesced sample without replaying ov
     expected.push(fallback);
     return expected;
   });
-  const live = page.locator(".ink-live-vector:visible");
-  const livePath = await live
-    .locator("g path")
-    .evaluateAll((elements) => elements.map((e) => e.getAttribute("d")).join(""));
-  expect(livePath.length).toBeGreaterThan(50_000);
+  const alpha = await canvas.evaluate((element) => {
+    const raster = element.parentElement!.querySelector(".ink-live-raster") as HTMLCanvasElement;
+    const ctx = raster.getContext("2d")!,
+      matrix = ctx.getTransform();
+    const vector = element.parentElement!.querySelector(".ink-vector") as SVGSVGElement;
+    const b = element.getBoundingClientRect();
+    const x = (171.5 * vector.viewBox.baseVal.width) / b.width;
+    const y = (160.5 * vector.viewBox.baseVal.height) / b.height;
+    return ctx.getImageData(
+      Math.floor(x * matrix.a + matrix.e),
+      Math.floor(y * matrix.d + matrix.f),
+      1,
+      1,
+    ).data[3];
+  });
+  expect(alpha).toBeGreaterThan(0);
   await lift(session, box.x + 171.7, box.y + 160.7);
   await expect.poll(async () => (await storedInkSummary(page)).count).toBe(2501);
   const doc = await latest(page),
@@ -354,8 +580,9 @@ test("fast tiny loops retain every raw and coalesced sample without replaying ov
   expect(stroke.points.every((p: any, i: number, a: any[]) => !i || p.t >= a[i - 1].t)).toBe(true);
   expect(stroke.points.at(-1).p).toBeCloseTo(0.45);
   const path = page.locator(".ink-vector:visible g path").last();
+  await expect(page.locator(".ink-vector:visible g path")).toHaveCount(2501);
   const completed = (await path.getAttribute("d"))!;
-  expect(completed.startsWith(livePath)).toBe(true);
+  expect(completed.length).toBeGreaterThan(50_000);
   await page.reload();
   await expect(path).toHaveAttribute("d", completed);
 });
@@ -611,6 +838,30 @@ test("long live highlighter strokes retain uniform transparency across rendering
   });
   const raster = async (live: boolean) =>
     page.evaluate(async (live) => {
+      if (live) {
+        const source = document.querySelector(".ink-live-raster") as HTMLCanvasElement;
+        const paper = document.querySelector(".ink-canvas")!.getBoundingClientRect();
+        const canvas = document.createElement("canvas");
+        canvas.width = 794;
+        canvas.height = 1123;
+        const ctx = canvas.getContext("2d")!;
+        ctx.globalAlpha = Number(getComputedStyle(source).opacity);
+        ctx.drawImage(
+          source,
+          (parseFloat(source.style.left) * 794) / paper.width,
+          (parseFloat(source.style.top) * 1123) / paper.height,
+          (parseFloat(source.style.width) * 794) / paper.width,
+          (parseFloat(source.style.height) * 1123) / paper.height,
+        );
+        const data = ctx.getImageData(0, 0, 794, 1123).data;
+        let max = 0,
+          covered = 0;
+        for (let i = 3; i < data.length; i += 4) {
+          max = Math.max(max, data[i]);
+          if (data[i] >= 70) covered++;
+        }
+        return { max, covered };
+      }
       const original = document.querySelector(
         live
           ? ".document-pane:not([hidden]) .ink-live-vector"
@@ -681,7 +932,7 @@ test("long live highlighter strokes retain uniform transparency across rendering
   await expect(page.locator(".ink-vector:visible g path")).toHaveCount(1);
   const completed = await raster(false);
   expect(completed.max).toBeLessThanOrEqual(78);
-  expect(Math.abs(completed.covered - live.covered)).toBeLessThan(40);
+  expect(Math.abs(completed.covered - live.covered)).toBeLessThan(live.covered * 0.03);
 });
 
 test("live ink updates within the input event and keeps new coalesced samples after raw input", async ({

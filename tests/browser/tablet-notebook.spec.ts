@@ -223,9 +223,26 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
       }),
     );
   }, box);
-  const live = page.locator(".ink-live-vector:visible g path").first();
-  await expect(live).not.toHaveAttribute("d", "");
-  const initial = (await live.getAttribute("d"))!;
+  const prefix = () =>
+    canvas.evaluate((element) => {
+      const raster = element.parentElement!.querySelector(".ink-live-raster") as HTMLCanvasElement;
+      const x = parseFloat(raster.style.left),
+        y = parseFloat(raster.style.top);
+      const scaleX = raster.width / parseFloat(raster.style.width),
+        scaleY = raster.height / parseFloat(raster.style.height);
+      return Array.from(
+        raster
+          .getContext("2d")!
+          .getImageData(
+            Math.floor((120 - x) * scaleX),
+            Math.floor((96 - y) * scaleY),
+            Math.ceil(20 * scaleX),
+            Math.ceil(8 * scaleY),
+          ).data,
+      );
+    });
+  const initial = await prefix();
+  expect(initial.some((value, i) => i % 4 === 3 && value > 0)).toBe(true);
   await session.send("Input.dispatchMouseEvent", {
     type: "mouseMoved",
     x: box.x + 220,
@@ -235,7 +252,7 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
     pointerType: "pen",
     force: 0.5,
   });
-  await expect.poll(async () => (await live.getAttribute("d"))?.startsWith(initial)).toBe(true);
+  expect(await prefix()).toEqual(initial);
   await session.send("Input.dispatchMouseEvent", {
     type: "mouseReleased",
     x: box.x + 250,
@@ -260,7 +277,8 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
     x: box.x + 250,
     y: box.y + 240,
     pointerType: "pen",
-    buttons: 0,
+    buttons: 2,
+    force: 0,
   });
   await page.waitForTimeout(360);
   const touches = (distance: number) => [

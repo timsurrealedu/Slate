@@ -1,12 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useId,
-  useMemo,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import { useLayoutEffect, useRef, useId, useMemo, forwardRef, useImperativeHandle } from "react";
 import type { Page, Point, Stroke } from "../core/model";
 import {
   drawLiveStroke,
@@ -58,8 +50,10 @@ interface Gesture {
   scrollY: number;
   clientX: number;
   clientY: number;
-  rawTime?: number;
   rawSamples?: Point[];
+}
+function penContact(e: PointerEvent) {
+  return !!(e.buttons & 33) || e.pressure > 0;
 }
 export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props, forwardedRef) {
   const canvasRef = useRef<HTMLCanvasElement>(null),
@@ -91,6 +85,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     liveRasterPoints: 0,
     liveRasterPressure: 0.5,
     appendFrom: -1,
+    rasterAppendFrom: -1,
     rasterStrokes: null as Stroke[] | null,
     rasterRect: null as Rect | null,
     rasterDirty: true,
@@ -140,7 +135,9 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     const r = runtime.current;
     if (append) {
       if (r.appendFrom < 0 && r.vectorStrokes === r.strokes) r.appendFrom = r.strokes.length;
-    } else r.appendFrom = -1;
+      if (r.rasterAppendFrom < 0 && r.rasterStrokes === r.strokes)
+        r.rasterAppendFrom = r.strokes.length;
+    } else r.appendFrom = r.rasterAppendFrom = -1;
     r.history.push(r.strokes);
     if (r.history.length > 80) r.history.shift();
     r.future = [];
@@ -189,6 +186,11 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     if (r.rasterTimer) clearTimeout(r.rasterTimer);
     r.rasterTimer = 0;
     r.rasterActive = active;
+    if (!active && r.vectorStrokes !== r.strokes) {
+      // Keep cached ink visible until its replacement vectors have been published.
+      schedule();
+      return;
+    }
     const ready = active && !!r.rasterRect;
     if (inkRef.current) inkRef.current.style.display = ready ? "none" : "";
     if (rasterRef.current) rasterRef.current.style.visibility = ready ? "visible" : "hidden";
@@ -354,6 +356,9 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     if (r.rasterActive) {
       if (inkRef.current) inkRef.current.style.display = "none";
       raster.style.visibility = "visible";
+    } else {
+      if (inkRef.current) inkRef.current.style.display = "";
+      raster.style.visibility = "hidden";
     }
   }
   function paintInk() {
@@ -365,6 +370,12 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     const strokes = g?.changed || r.strokes;
     const changed = strokes !== r.vectorStrokes;
     const appendFrom = strokes !== r.vectorStrokes && !g?.changed ? r.appendFrom : -1;
+    if (r.rasterActive && !g?.changed) {
+      paintRaster(strokes, r.rasterAppendFrom);
+      if (r.rasterStrokes === strokes) r.rasterAppendFrom = -1;
+      paintLiveInk();
+      return;
+    }
     if (strokes !== r.vectorStrokes) {
       if (appendFrom < 0) {
         const ids = new Set(strokes.map((s) => s.id));
@@ -376,6 +387,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         }
       }
       let cursor = appendFrom < 0 ? group.firstChild : null;
+      const deadline = performance.now() + 4;
       for (let i = Math.max(0, appendFrom); i < strokes.length; i++) {
         const stroke = strokes[i];
         let path = r.vectorPaths.get(stroke.id);
@@ -399,10 +411,17 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         // Existing paths stay attached. A pen lift appends only the new stroke.
         if (path.element !== cursor) group.insertBefore(path.element, cursor);
         cursor = path.element.nextSibling;
+        if (appendFrom >= 0 && i + 1 < strokes.length && performance.now() >= deadline) {
+          for (let j = appendFrom; j <= i; j++) releaseStrokeGeometry(strokes[j]);
+          r.appendFrom = i + 1;
+          schedule();
+          return;
+        }
       }
       r.vectorStrokes = strokes;
     }
-    paintRaster(strokes, appendFrom);
+    paintRaster(strokes, g?.changed ? -1 : r.rasterAppendFrom);
+    if (r.rasterStrokes === strokes) r.rasterAppendFrom = -1;
     if (changed)
       for (let i = Math.max(0, appendFrom); i < strokes.length; i++)
         releaseStrokeGeometry(strokes[i]);
@@ -415,6 +434,8 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     if (!live) return;
     const g = r.gesture;
     const stroke = g?.stroke || null;
+    // The immediate canvas already owns live ink. Avoid building hidden SVG geometry.
+    if (stroke && stroke === r.liveRasterStroke) return;
     if (stroke !== r.liveStroke) {
       live.replaceChildren();
       r.livePaths = [];
@@ -519,7 +540,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       old = r.history.pop();
     if (!old) return;
     r.future.push(r.strokes);
-    r.appendFrom = -1;
+    r.appendFrom = r.rasterAppendFrom = -1;
     r.strokes = old;
     r.selection.clear();
     propsRef.current.onChange(old);
@@ -534,6 +555,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       if (!next) return;
       r.history.push(r.strokes);
       r.appendFrom = -1;
+      r.rasterAppendFrom = -1;
       r.strokes = next;
       r.selection.clear();
       propsRef.current.onChange(next);
@@ -580,7 +602,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r.pan = null;
       r.twoFinger = null;
       r.lastTap = null;
-      r.appendFrom = -1;
+      r.appendFrom = r.rasterAppendFrom = -1;
       rasterMode(false);
     }
     r.strokes = props.page.strokes;
@@ -603,7 +625,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     props.page.height,
     props.transparent,
   ]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current!;
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
@@ -634,7 +656,15 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         redrawBase();
       }
     }
-    function down(e: PointerEvent) {
+    function capture(e: PointerEvent) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (error) {
+        // A forwarded/interrupted stream can lack capture state; window listeners retain its ink.
+        if (!(error instanceof DOMException) || error.name !== "NotFoundError") throw error;
+      }
+    }
+    function down(e: PointerEvent, first = e) {
       const r = runtime.current,
         p = propsRef.current;
       const onPaper = e.target === canvas;
@@ -643,6 +673,8 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         (e.pointerType !== "touch" || (e.target as Element).closest("button,input,a,[role=button]"))
       )
         return;
+      if (e.pointerType === "pen" && !penContact(e)) return;
+      if (e.pointerType === "pen" && r.gesture && r.gesture.pointerType !== "touch") finish();
       if (
         e.pointerType === "touch" &&
         (r.gesture?.pointerType === "pen" ||
@@ -714,7 +746,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
             distance: r.pinchDistance,
             moved: false,
           };
-          canvas.setPointerCapture(e.pointerId);
+          capture(e);
           return;
         }
         if (r.twoFinger) return;
@@ -722,9 +754,9 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       }
       if (r.gesture || (e.button !== 0 && e.pointerType !== "pen")) return;
       e.preventDefault();
-      canvas.setPointerCapture(e.pointerId);
+      capture(e);
       canvas.focus({ preventScroll: true });
-      const start = point(e),
+      const start = point(first),
         selection = r.selection.size
           ? bounds(r.strokes.filter((s) => r.selection.has(s.id)))
           : null;
@@ -791,11 +823,15 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     }
     function move(e: PointerEvent) {
       const r = runtime.current;
+      const coalesced = e.getCoalescedEvents?.();
+      // Recover a contact from its first received hardware point when down was not delivered.
+      if (e.pointerType === "pen" && penContact(e) && (!r.gesture || r.gesture.id !== e.pointerId))
+        down(e, coalesced?.[0] || e);
       if (r.rejectedTouches.has(e.pointerId)) {
         if (e.cancelable) e.preventDefault();
         return;
       }
-      if (e.pointerType === "pen" && e.buttons) r.penUntil = performance.now() + 350;
+      if (e.pointerType === "pen" && penContact(e)) r.penUntil = performance.now() + 350;
       if (r.touches.has(e.pointerId)) {
         r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (r.touches.size > 1) {
@@ -838,34 +874,26 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         }
         return;
       }
-      const coalesced = e.getCoalescedEvents?.();
       // The parent is a processed summary, not an extra hardware sample.
       const samples = coalesced?.length ? coalesced : [e];
-      if (
-        g.mode === "draw" &&
-        e.type === "pointermove" &&
-        !coalesced?.length &&
-        e.timeStamp <= (g.rawTime ?? -1)
-      )
-        return;
       const raw = e.type === "pointermove" ? g.rawSamples || [] : [];
       let rawIndex = 0;
       for (const sample of samples) {
+        if (e.pointerType === "pen" && !penContact(e) && !penContact(sample)) continue;
         const next = point(sample);
         if (g.mode === "draw") {
           // Compare hardware samples, not parent dispatch times, when raw and move batches overlap.
           while (rawIndex < raw.length && raw[rawIndex].t < next.t) rawIndex++;
-          const seen = raw[rawIndex];
-          if (
-            seen &&
-            seen.t === next.t &&
-            seen.x === next.x &&
-            seen.y === next.y &&
-            seen.p === next.p
-          ) {
-            rawIndex++;
-            continue;
+          let duplicate = false;
+          for (let i = rawIndex; i < raw.length && raw[i].t === next.t; i++) {
+            const seen = raw[i];
+            if (seen.x === next.x && seen.y === next.y && seen.p === next.p) {
+              rawIndex = i + 1;
+              duplicate = true;
+              break;
+            }
           }
+          if (duplicate) continue;
           if (e.type === "pointerrawupdate") (g.rawSamples ??= []).push(next);
           const points = g.stroke!.points,
             last = points[points.length - 1];
@@ -909,15 +937,23 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           );
         }
       }
-      if (e.type === "pointerrawupdate") g.rawTime = samples.at(-1)!.timeStamp;
       if (e.type === "pointermove") g.rawSamples = undefined;
+      // A barrel button can remain pressed across nib lifts, yielding move instead of up/down.
+      if (e.pointerType === "pen" && !penContact(e)) {
+        finish();
+        return;
+      }
       // Paint only new ink now; completed ink, vectors and UI work remain frame-batched.
       if (g.mode === "draw") paintInputInk();
       schedule();
     }
     function raw(event: Event) {
       const e = event as PointerEvent;
-      if (e.pointerType === "pen" && runtime.current.gesture?.mode === "draw") move(e);
+      if (
+        e.pointerType === "pen" &&
+        (!runtime.current.gesture || runtime.current.gesture.mode === "draw")
+      )
+        move(e);
     }
     function finish(e?: PointerEvent) {
       const r = runtime.current;
@@ -1011,12 +1047,17 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       if (runtime.current.gesture?.pointerType === "pen" && runtime.current.gesture.mode === "draw")
         e.preventDefault();
     };
-    viewport.addEventListener("pointerdown", down);
-    viewport.addEventListener("pointermove", move);
-    viewport.addEventListener("pointerrawupdate", raw);
-    viewport.addEventListener("pointerup", finish);
-    viewport.addEventListener("pointercancel", cancel);
-    viewport.addEventListener("lostpointercapture", finish);
+    const start = (e: PointerEvent) => down(e);
+    const lostCapture = (e: PointerEvent) => {
+      // Capture ownership can change while the nib is still down. Window input continues it.
+      if (runtime.current.gesture?.pointerType !== "pen") finish(e);
+    };
+    viewport.addEventListener("pointerdown", start, true);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerrawupdate", raw, true);
+    window.addEventListener("pointerup", finish, true);
+    window.addEventListener("pointercancel", cancel, true);
+    viewport.addEventListener("lostpointercapture", lostCapture);
     viewport.addEventListener("wheel", wheel, { passive: false, capture: true });
     viewport?.addEventListener("scroll", invalidateInputRect, { passive: true });
     return () => {
@@ -1024,12 +1065,12 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       if (runtime.current.rasterTimer) clearTimeout(runtime.current.rasterTimer);
       cancelAnimationFrame(runtime.current.frame);
       runtime.current.frame = 0;
-      viewport.removeEventListener("pointerdown", down);
-      viewport.removeEventListener("pointermove", move);
-      viewport.removeEventListener("pointerrawupdate", raw);
-      viewport.removeEventListener("pointerup", finish);
-      viewport.removeEventListener("pointercancel", cancel);
-      viewport.removeEventListener("lostpointercapture", finish);
+      viewport.removeEventListener("pointerdown", start, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerrawupdate", raw, true);
+      window.removeEventListener("pointerup", finish, true);
+      window.removeEventListener("pointercancel", cancel, true);
+      viewport.removeEventListener("lostpointercapture", lostCapture);
       viewport.removeEventListener("wheel", wheel, true);
       viewport?.removeEventListener("scroll", invalidateInputRect);
     };

@@ -3,6 +3,7 @@ import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.MotionEvent;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebView;
@@ -18,6 +19,18 @@ import com.getcapacitor.WebViewListener;
 import java.util.Locale;
 
 public class MainActivity extends BridgeActivity {
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (bridge != null && (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN)) {
+            int tool = event.getToolType(event.getActionIndex());
+            if (tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER) {
+                // Deliver subsequent pen samples without Android's frame-aligned input batching.
+                bridge.getWebView().requestUnbufferedDispatch(event);
+            }
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
     @Override public void onCreate(Bundle state) {
         registerPlugin(SlateExportPlugin.class);
         registerPlugin(SlateVaultPlugin.class);

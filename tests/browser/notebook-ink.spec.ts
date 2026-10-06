@@ -68,6 +68,7 @@ test("pressure can be disabled and restored without changing previous ink, and s
   expect(fixed.points.at(-1).p - fixed.points[0].p).toBeGreaterThan(0.9);
   expect((await latest(page)).pages[0].strokes[0]).toEqual(original);
   await expect(page.locator(".ink-vector:visible g path").first()).toHaveAttribute("d", firstPath!);
+  await expect(page.locator(".ink-vector:visible g path")).toHaveCount(2);
 
   // Measure actual raster widths, rather than inferring behavior from stored flags.
   const widths = await page.locator(".ink-vector:visible g path").evaluateAll((elements) =>

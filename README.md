@@ -2,7 +2,7 @@
 
 A local-first workspace for Markdown, linked notes, paged handwriting, PDFs and DOCX. Slate runs offline on Windows, Linux, Android and the web, with no account required.
 
-The maintained application lives at the repository root. The current local release is **0.1.17**. See [release status](docs/release-status.md) for validation evidence and device limitations.
+The maintained application lives at the repository root. The current local release is **0.1.18**. See [release status](docs/release-status.md) for validation evidence and device limitations.
 
 Keep the latest complete release, one compressed rollback and compact source backups. See [storage retention](docs/storage-retention.md) for the backup policy and retained archives.
 

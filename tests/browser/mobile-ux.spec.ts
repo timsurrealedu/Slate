@@ -146,7 +146,8 @@ test("notebook zoom reaches 1000 percent without blank frames and Fine ink is th
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);
   expect((await latest(page)).pages[0].strokes[0].width).toBe(0.6);
   const canvas = page.locator(".ink-canvas:visible");
-  await canvas.evaluate((element) => {
+  const savedPoints = (await latest(page)).pages[0].strokes[0].points;
+  await canvas.evaluate((element, points) => {
     const canvas = element as HTMLCanvasElement;
     (window as any).inkFrames = { blank: 0, frames: 0, stopped: false };
     const sample = () => {
@@ -154,11 +155,36 @@ test("notebook zoom reaches 1000 percent without blank frames and Fine ink is th
       if (state.stopped) return;
       state.frames++;
       const vector = canvas.parentElement!.querySelector(".ink-vector") as SVGSVGElement;
-      if (!vector?.isConnected || !vector.querySelector("g path")?.getAttribute("d")) state.blank++;
+      let ready = !!vector?.isConnected && !!vector.querySelector("g path")?.getAttribute("d");
+      if (!ready) {
+        const raster = canvas.parentElement!.querySelector(
+          ".ink-raster:not(.ink-live-raster)",
+        ) as HTMLCanvasElement;
+        if (
+          raster &&
+          getComputedStyle(raster).visibility === "visible" &&
+          raster.width &&
+          raster.height
+        ) {
+          const ctx = raster.getContext("2d")!,
+            matrix = ctx.getTransform();
+          const samples = points
+            .map((p) => ({ x: p.x * matrix.a + matrix.e, y: p.y * matrix.d + matrix.f }))
+            .filter((p) => p.x >= 0 && p.y >= 0 && p.x < raster.width && p.y < raster.height);
+          // At high zoom, saved ink may legitimately lie outside the visible cache slice.
+          ready =
+            samples.length === 0 ||
+            samples.some((p) => {
+              const data = ctx.getImageData(Math.floor(p.x) - 1, Math.floor(p.y) - 1, 3, 3).data;
+              return data.some((value, i) => i % 4 === 3 && value > 0);
+            });
+        }
+      }
+      if (!ready) state.blank++;
       requestAnimationFrame(sample);
     };
     requestAnimationFrame(sample);
-  });
+  }, savedPoints);
   const viewport = page.locator(".page-viewport:visible");
   await viewport.dispatchEvent("wheel", { ctrlKey: true, deltaY: -4000 });
   await expect(page.locator(".zoom-control")).toContainText("1000%");
