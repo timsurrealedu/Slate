@@ -192,7 +192,8 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       return;
     }
     const ready = active && !!r.rasterRect;
-    if (inkRef.current) inkRef.current.style.display = ready ? "none" : "";
+    // Preserve saved SVG geometry across pen lifts; display:none discards its layout cache.
+    if (inkRef.current) inkRef.current.style.visibility = ready ? "hidden" : "";
     if (rasterRef.current) rasterRef.current.style.visibility = ready ? "visible" : "hidden";
   }
   function sizeRaster(
@@ -354,10 +355,10 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r.rasterStrokes = strokes;
     }
     if (r.rasterActive) {
-      if (inkRef.current) inkRef.current.style.display = "none";
+      if (inkRef.current) inkRef.current.style.visibility = "hidden";
       raster.style.visibility = "visible";
     } else {
-      if (inkRef.current) inkRef.current.style.display = "";
+      if (inkRef.current) inkRef.current.style.visibility = "";
       raster.style.visibility = "hidden";
     }
   }
@@ -823,6 +824,14 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     }
     function move(e: PointerEvent) {
       const r = runtime.current;
+      // Inactive notebooks also listen at the window; only the owning page expands samples.
+      if (
+        e.target !== canvas &&
+        r.gesture?.id !== e.pointerId &&
+        !r.touches.has(e.pointerId) &&
+        !r.rejectedTouches.has(e.pointerId)
+      )
+        return;
       const coalesced = e.getCoalescedEvents?.();
       // Recover a contact from its first received hardware point when down was not delivered.
       if (e.pointerType === "pen" && penContact(e) && (!r.gesture || r.gesture.id !== e.pointerId))

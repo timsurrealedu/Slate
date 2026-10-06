@@ -217,48 +217,185 @@ test("distinct coordinates sharing a hardware timestamp survive raw overlap", as
   await session.detach();
 });
 
-async function loadedNotebook(page: Page, count: number) {
+test("pen contact after pauses keeps long-stroke notebook layout within the empty-page budget", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const context = await browser.newContext({
+    baseURL: process.env.SLATE_TEST_URL || "http://localhost:3000",
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 2,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  const session = await context.newCDPSession(page);
+  await session.send("Performance.enable");
+  const results: { count: number; layouts: number[] }[] = [];
+  try {
+    for (const count of [0, 200]) {
+      await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await loadedNotebook(page, count, 512, true);
+      const original = await storedInkPrefix(page, count);
+      await session.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+      const layouts: number[] = [];
+      for (let contact = 0; contact < 2; contact++) {
+        const before = (await session.send("Performance.getMetrics")).metrics;
+        const { canvas, box } = await startPen(page, session);
+        const after = (await session.send("Performance.getMetrics")).metrics;
+        layouts.push(
+          1000 *
+            (after.find((m) => m.name === "LayoutDuration")!.value -
+              before.find((m) => m.name === "LayoutDuration")!.value),
+        );
+        await canvas.evaluate((element) => {
+          const b = element.getBoundingClientRect();
+          for (let i = 0; i < 16; i++)
+            element.dispatchEvent(
+              new PointerEvent("pointermove", {
+                bubbles: true,
+                pointerType: "pen",
+                pointerId: Number((element as HTMLElement).dataset.pointer),
+                buttons: 1,
+                pressure: 0.5,
+                clientX: b.x + 165 + i,
+                clientY: b.y + 160 + Math.sin(i / 3) * 4,
+              }),
+            );
+        });
+        await lift(session, box.x + 180, box.y + 160 + Math.sin(5) * 4);
+        // Wait for the idle handoff, then resume against the settled completed ink.
+        await expect(
+          page.locator(".document-pane:not([hidden]) .ink-raster:not(.ink-live-raster)"),
+        ).toHaveCSS("visibility", "hidden");
+        await expect(page.locator(".ink-vector:visible > g:not(.ink-live) path")).toHaveCount(
+          count + contact + 1,
+        );
+      }
+      await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      // Preserve pen-down, all 16 moves, and the pen-up sample.
+      await expect.poll(() => storedInkSummary(page)).toEqual({ count: count + 2, points: 18 });
+      expect(await storedInkPrefix(page, count)).toBe(original);
+      results.push({ count, layouts });
+      await page.getByRole("button", { name: "Back to library", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Your library", exact: true })).toBeVisible();
+    }
+    await writeFile(
+      "artifacts/ink-growth-contact-layout.json",
+      JSON.stringify({ cpuSlowdown: 4, samplesPerStroke: 512, results }, null, 2),
+    );
+    for (let i = 0; i < 2; i++)
+      expect(results[1].layouts[i]).toBeLessThan(Math.max(5, results[0].layouts[i] * 3));
+  } finally {
+    await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    await context.close();
+  }
+});
+
+test("inactive notebooks do not expand another page's hardware input batches", async ({
+  page,
+  context,
+}) => {
+  await loadedNotebook(page, 0);
+  await page.getByRole("button", { name: "Library", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Your library", exact: true })).toBeVisible();
+  await loadedNotebook(page, 0);
+  await expect(page.locator(".ink-canvas")).toHaveCount(2);
+  const session = await context.newCDPSession(page);
+  const { canvas, box } = await startPen(page, session);
+  const reads = await canvas.evaluate((element) => {
+    const b = element.getBoundingClientRect(),
+      id = Number((element as HTMLElement).dataset.pointer);
+    const sample = (x: number, y: number) =>
+      new PointerEvent("pointermove", {
+        pointerId: id,
+        pointerType: "pen",
+        buttons: 1,
+        pressure: 0.5,
+        clientX: b.x + x,
+        clientY: b.y + y,
+      });
+    const samples = [sample(170.125, 165.25), sample(190.25, 180.375)];
+    let reads = 0;
+    for (const type of ["pointerrawupdate", "pointermove"]) {
+      const event = new PointerEvent(type, {
+        bubbles: true,
+        pointerId: id,
+        pointerType: "pen",
+        buttons: 1,
+        pressure: 0.5,
+        clientX: b.x + 190.25,
+        clientY: b.y + 180.375,
+      });
+      Object.defineProperty(event, "getCoalescedEvents", {
+        value: () => {
+          reads++;
+          return samples;
+        },
+      });
+      element.dispatchEvent(event);
+    }
+    return reads;
+  });
+  await lift(session, box.x + 200, box.y + 185);
+  await expect.poll(() => storedInkSummary(page)).toEqual({ count: 1, points: 4 });
+  const doc = await latest(page);
+  expect(doc.pages[0].strokes[0].points[1].x).toBeCloseTo(
+    (170.125 * doc.pages[0].width) / box.width,
+    7,
+  );
+  expect(doc.pages[0].strokes[0].points[2].y).toBeCloseTo(
+    (180.375 * doc.pages[0].height) / box.height,
+    7,
+  );
+  expect(reads).toBe(2);
+  await session.detach();
+});
+
+async function loadedNotebook(page: Page, count: number, pointsPerStroke = 48, precise = false) {
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
   await expect(page.locator(".ink-canvas:visible")).toBeVisible();
   await expect.poll(async () => (await latest(page)).revision).toBeGreaterThan(1);
-  await page.evaluate(async (count) => {
-    const db = await new Promise<IDBDatabase>((resolve) => {
-      const open = indexedDB.open("slate-workspace");
-      open.onsuccess = () => resolve(open.result);
-    });
-    const doc = await new Promise<any>((resolve) => {
-      const r = db.transaction("documents").objectStore("documents").get(location.hash.slice(5));
-      r.onsuccess = () => resolve(r.result);
-    });
-    doc.pages[0].strokes = Array.from({ length: count }, (_, i) => ({
-      id: crypto.randomUUID(),
-      tool: i % 20 ? "pen" : "highlighter",
-      color: "#385775",
-      width: i % 20 ? 0.6 : 14,
-      rendering: ["precise", "direct", "smooth"][i % 3],
-      pressureSensitive: true,
-      points: Array.from({ length: 48 }, (_, j) => ({
-        x: 45 + (i % 24) * 28 + Math.sin(j / 7) * 8,
-        y: 80 + Math.floor(i / 24) * 7 + j / 8,
-        p: 0.35 + (j % 10) / 30,
-        t: j,
-      })),
-    }));
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(["documents", "meta"], "readwrite");
-      tx.objectStore("documents").put(doc);
-      const prefs = tx.objectStore("meta").get("preferences");
-      prefs.onsuccess = () =>
-        tx
-          .objectStore("meta")
-          .put({ ...prefs.result, inkWidth: 0.6, notebookPages: true }, "preferences");
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-  }, count);
+  await page.evaluate(
+    async ({ count, pointsPerStroke, precise }) => {
+      const db = await new Promise<IDBDatabase>((resolve) => {
+        const open = indexedDB.open("slate-workspace");
+        open.onsuccess = () => resolve(open.result);
+      });
+      const doc = await new Promise<any>((resolve) => {
+        const r = db.transaction("documents").objectStore("documents").get(location.hash.slice(5));
+        r.onsuccess = () => resolve(r.result);
+      });
+      doc.pages[0].strokes = Array.from({ length: count }, (_, i) => ({
+        id: crypto.randomUUID(),
+        tool: i % 20 ? "pen" : "highlighter",
+        color: "#385775",
+        width: i % 20 ? 0.6 : 14,
+        rendering: precise ? "precise" : ["precise", "direct", "smooth"][i % 3],
+        pressureSensitive: true,
+        points: Array.from({ length: pointsPerStroke }, (_, j) => ({
+          x: 45 + (i % 24) * 28 + Math.sin(j / 7) * 8,
+          y: 80 + Math.floor(i / 24) * 7 + j / 8,
+          p: 0.35 + (j % 10) / 30,
+          t: j,
+        })),
+      }));
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(["documents", "meta"], "readwrite");
+        tx.objectStore("documents").put(doc);
+        const prefs = tx.objectStore("meta").get("preferences");
+        prefs.onsuccess = () =>
+          tx
+            .objectStore("meta")
+            .put({ ...prefs.result, inkWidth: 0.6, notebookPages: true }, "preferences");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    },
+    { count, pointsPerStroke, precise },
+  );
   await page.reload();
   await expect(page.locator(".ink-vector:visible g path")).toHaveCount(count);
   await expect(page.locator(".paper-thumbnail:visible")).toBeVisible();
@@ -329,6 +466,28 @@ async function storedInkSummary(page: Page) {
         open.onerror = () => reject(open.error);
       }),
   );
+}
+
+async function storedInkPrefix(page: Page, count: number) {
+  return page.evaluate(async (count) => {
+    const db = await new Promise<IDBDatabase>((resolve) => {
+      const r = indexedDB.open("slate-workspace");
+      r.onsuccess = () => resolve(r.result);
+    });
+    const doc = await new Promise<any>((resolve) => {
+      const r = db.transaction("documents").objectStore("documents").get(location.hash.slice(5));
+      r.onsuccess = () => resolve(r.result);
+    });
+    db.close();
+    // Keep large integrity comparisons in the page, outside the timed contact and test trace.
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(JSON.stringify(doc.pages[0].strokes.slice(0, count))),
+    );
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
+      "",
+    );
+  }, count);
 }
 
 test("continuous letters stay responsive while dense notebooks autosave", async ({
