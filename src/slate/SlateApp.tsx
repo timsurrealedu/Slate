@@ -522,6 +522,7 @@ export default function SlateApp() {
                   inert={!!doc}
                 >
                   <Library
+                    active={!doc}
                     documents={app.documents}
                     folders={app.folders}
                     view={app.view}

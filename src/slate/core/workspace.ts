@@ -45,6 +45,11 @@ const listeners = new Set<() => void>();
 const dirty = new Map<string, SlateDocument>();
 const revisions = new Map<string, number>();
 const writers = new Map<string, Promise<void>>();
+const pendingInkWrites = new Map<
+  string,
+  { timer: ReturnType<typeof setTimeout>; deadline: number }
+>();
+let flushing = 0;
 let channel: BroadcastChannel | undefined;
 let pendingPreferences: Preferences | null = null;
 let preferencesWriter: Promise<void> | undefined;
@@ -90,6 +95,15 @@ function countSaves() {
 }
 function savingCount() {
   publish({ saving: countSaves() });
+}
+function queueInkWrite(id: string) {
+  const pending = pendingInkWrites.get(id);
+  if (pending) clearTimeout(pending.timer);
+  const deadline = pending?.deadline ?? Date.now() + 1000;
+  pendingInkWrites.set(id, {
+    deadline,
+    timer: setTimeout(() => void write(id), Math.max(0, Math.min(200, deadline - Date.now()))),
+  });
 }
 export function useWorkspace() {
   return useSyncExternalStore(
@@ -172,7 +186,12 @@ export const workspace = {
       documents: state.documents.map((d) => (d.id === id ? doc : d)),
       saving: countSaves(),
     });
-    if (!organizing) void write(id);
+    if (!organizing) {
+      // Batch quick pen lifts instead of serializing a large notebook after every letter.
+      if (!flushing && "pages" in patch && (doc.kind === "notebook" || doc.kind === "pdf"))
+        queueInkWrite(id);
+      else void write(id);
+    }
   },
   async create(kind: DocumentKind, folderId: string | null = null) {
     const baseTitle = kind === "notebook" ? "Untitled notebook" : "Untitled note";
@@ -434,11 +453,16 @@ export const workspace = {
     await writePreferences();
   },
   async flush() {
-    for (const id of dirty.keys()) void write(id);
-    if (pendingPreferences) void writePreferences();
-    await Promise.all([...writers.values(), ...(preferencesWriter ? [preferencesWriter] : [])]);
-    if (dirty.size || pendingPreferences)
-      throw new Error(state.error || "Some changes have not been saved.");
+    flushing++;
+    try {
+      for (const id of dirty.keys()) void write(id);
+      if (pendingPreferences) void writePreferences();
+      await Promise.all([...writers.values(), ...(preferencesWriter ? [preferencesWriter] : [])]);
+      if (dirty.size || pendingPreferences)
+        throw new Error(state.error || "Some changes have not been saved.");
+    } finally {
+      flushing--;
+    }
   },
   async retry() {
     publish({ error: null, conflictId: null });
@@ -577,6 +601,11 @@ export const workspace = {
   },
 };
 async function write(id: string): Promise<void> {
+  const pending = pendingInkWrites.get(id);
+  if (pending) {
+    clearTimeout(pending.timer);
+    pendingInkWrites.delete(id);
+  }
   if (writers.has(id)) return writers.get(id)!;
   const writer = (async () => {
     while (dirty.has(id)) {
@@ -589,6 +618,7 @@ async function write(id: string): Promise<void> {
         const next = state.documents.map((d) => (d.id === id ? { ...d, revision } : d));
         publish({ documents: next, saving: countSaves() });
         channel?.postMessage({ type: "saved", id });
+        if (!flushing && pendingInkWrites.has(id)) break;
       } catch (error) {
         publish({
           error:

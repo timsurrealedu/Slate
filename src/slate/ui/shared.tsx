@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import * as Context from "@radix-ui/react-context-menu";
 import * as Popover from "@radix-ui/react-popover";
-import { X, FileText, NotebookPen, File, FileType } from "lucide-react";
+import { X, FileText, NotebookPen, File, FileType, Check } from "lucide-react";
 import type { DocumentKind } from "../core/model";
 export function SlateMark({ size = 30 }: { size?: number }) {
   return (
@@ -156,6 +156,7 @@ export interface MenuAction {
   danger?: boolean;
   disabled?: boolean;
   separator?: boolean;
+  checked?: boolean;
 }
 export function Menu({
   trigger,
@@ -171,19 +172,28 @@ export function Menu({
       <Dropdown.Trigger asChild>{trigger}</Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content className="dropdown-menu" sideOffset={7} align="end" aria-label={label}>
-          {items.map((item, i) => (
-            <span key={i}>
-              {item.separator && <Dropdown.Separator className="menu-separator" />}
-              <Dropdown.Item
-                className={"menu-item " + (item.danger ? "danger" : "")}
-                disabled={item.disabled}
-                onSelect={item.onClick}
-              >
-                {item.icon}
-                {item.label}
-              </Dropdown.Item>
-            </span>
-          ))}
+          {items.map((item, i) => {
+            const Item = item.checked === undefined ? Dropdown.Item : Dropdown.CheckboxItem;
+            return (
+              <span key={i}>
+                {item.separator && <Dropdown.Separator className="menu-separator" />}
+                <Item
+                  {...(item.checked === undefined ? {} : { checked: item.checked })}
+                  className={"menu-item " + (item.danger ? "danger" : "")}
+                  disabled={item.disabled}
+                  onSelect={item.onClick}
+                >
+                  {item.icon}
+                  {item.label}
+                  {item.checked !== undefined && (
+                    <Dropdown.ItemIndicator style={{ marginLeft: "auto" }}>
+                      <Check size={16} />
+                    </Dropdown.ItemIndicator>
+                  )}
+                </Item>
+              </span>
+            );
+          })}
         </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>

@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { readMeta, writeMeta, docSchema, readWorkspace } from "../core/storage";
 import { makeDocument, type Folder, type SlateDocument } from "../core/model";
+import { inkVaultText } from "../core/ink-save";
 
 export interface VaultConnection {
   id: string;
@@ -281,7 +282,10 @@ export const vault = {
     if (active?.id !== doc.source.vaultId)
       throw new Error("Reopen this document's vault to save its file.");
     const path = safeVaultPath(doc.source.path);
-    const text = doc.kind === "note" ? doc.content : JSON.stringify({ ...doc, source: undefined });
+    const text =
+      doc.kind === "note"
+        ? doc.content
+        : (inkVaultText(doc) ?? JSON.stringify({ ...doc, source: undefined }));
     let expected = originals.get(path);
     if (expected === undefined) {
       expected = await readMeta<string | null>("vault-original:" + doc.id);

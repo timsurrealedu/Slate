@@ -78,6 +78,7 @@ test("pinch in and out keeps the drawing buffer stable until release and settles
   await page.setViewportSize({ width: 390, height: 844 });
   await notebook(page);
   await draw(page);
+  await expect.poll(async () => (await latest(page)).pages[0].strokes.length).toBe(1);
   const saved = (await latest(page)).pages[0].strokes;
   const session = await context.newCDPSession(page);
   const frame = () =>
@@ -154,7 +155,7 @@ test("pinch in and out keeps the drawing buffer stable until release and settles
   await expect(page.locator(".zoom-control")).toContainText("260%");
   await expect(page.locator(".paper-page:visible")).not.toHaveClass(/pinching/);
   for (const [initial, distance, end, label] of [
-    [120, 240, "touchEnd", "500%"],
+    [120, 240, "touchEnd", "520%"],
     [160, 14, "touchCancel", "50%"],
   ] as const) {
     await send("touchStart", initial);

@@ -8,8 +8,93 @@ import {
   type Stroke,
 } from "../src/slate/core/model";
 import { hitStroke, bounds, translate } from "../src/slate/ink/geometry";
-import { strokePath } from "../src/slate/ink/render";
+import { strokePath, strokePathChunks } from "../src/slate/ink/render";
 describe("knowledge and notebook model", () => {
+  it.each(["pen", "highlighter"] as const)(
+    "retains exact %s geometry and pressure across live rendering batches",
+    (tool) => {
+      const stroke: Stroke = {
+        id: "fast-writing",
+        rendering: "precise",
+        pressureSensitive: true,
+        tool,
+        color: "#385775",
+        width: tool === "pen" ? 0.6 : 14,
+        points: [],
+      };
+      const points = Array.from({ length: 1025 }, (_, i) => ({
+        x: 100 + i / 200 + Math.sin(i / 9) * 2,
+        y: 100 + Math.cos(i / 9) * 3,
+        p: (i % 17) / 16,
+        t: i / 240,
+      }));
+      let previous = "";
+      for (let start = 0; start < points.length; start += 127) {
+        stroke.points.push(...points.slice(start, start + 127));
+        const chunks = strokePathChunks(stroke);
+        const current = chunks.join("");
+        expect(current.startsWith(previous)).toBe(true);
+        expect(current).toBe(strokePath(structuredClone(stroke)));
+        expect(strokePath(stroke)).toBe(current);
+        previous = current;
+      }
+      expect(stroke.points).toEqual(points);
+    },
+  );
+  it.each(["smooth", "precise"] as const)(
+    "renders constant-width %s ink independently of recorded pressure without changing input",
+    (rendering) => {
+      const stroke: Stroke = {
+        id: "smooth",
+        rendering,
+        pressureSensitive: false,
+        tool: "pen",
+        color: "#385775",
+        width: 1.2,
+        points: Array.from({ length: 40 }, (_, i) => ({ x: i * 4, y: 20, p: i / 39, t: i })),
+      };
+      const original = structuredClone(stroke);
+      const steady = { ...stroke, points: stroke.points.map((p) => ({ ...p, p: 0.5 })) };
+      expect(strokePath(stroke)).toBe(strokePath(steady));
+      expect(strokePath({ ...stroke, pressureSensitive: true })).not.toBe(strokePath(steady));
+      expect(stroke).toEqual(original);
+      expect(translate(stroke, 5, 10)).toMatchObject({
+        rendering,
+        pressureSensitive: false,
+      });
+    },
+  );
+  it("keeps precise ink fixed through sharp turns, pressure jumps and retracing", () => {
+    const stroke: Stroke = {
+      id: "precise",
+      rendering: "precise",
+      pressureSensitive: true,
+      tool: "pen",
+      color: "#385775",
+      width: 1.2,
+      points: [
+        { x: 10, y: 10, p: 0.1, t: 0 },
+        { x: 100, y: 10, p: 0.9, t: 1 },
+      ],
+    };
+    const original = structuredClone(stroke.points);
+    const first = strokePath(stroke);
+    for (const point of [
+      { x: 100, y: 80, p: 0.1, t: 2 },
+      { x: 100, y: 10, p: 0.7, t: 3 },
+      { x: 20, y: 10, p: 0.2, t: 4 },
+      { x: 20, y: 10, p: 0.8, t: 5 },
+    ]) {
+      const before = strokePath(stroke);
+      stroke.points.push(point);
+      expect(strokePath(stroke).startsWith(before)).toBe(true);
+      expect(strokePath({ ...stroke, points: structuredClone(stroke.points) })).toBe(
+        strokePath(stroke),
+      );
+    }
+    expect(strokePath(stroke).startsWith(first)).toBe(true);
+    expect(stroke.points.slice(0, 2)).toEqual(original);
+  });
   it("keeps completed direct ink fixed as sharp turns and pressure samples arrive", () => {
     const stroke: Stroke = {
       id: "direct",

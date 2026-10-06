@@ -222,7 +222,7 @@ test("desktop tabs reorder under the pointer and retain order, active note and c
   await page.screenshot({ path: "artifacts/behavior-desktop-tabs.png" });
 });
 
-test("pen levels use even increments and vector paper and ink remain present at 500 percent", async ({
+test("pen levels use even increments and vector paper and ink remain present at 1000 percent", async ({
   page,
 }) => {
   await ready(page);
@@ -242,7 +242,7 @@ test("pen levels use even increments and vector paper and ink remain present at 
   await page
     .locator(".page-viewport:visible")
     .dispatchEvent("wheel", { ctrlKey: true, deltaY: -4000 });
-  await expect(page.locator(".zoom-control")).toContainText("500%");
+  await expect(page.locator(".zoom-control")).toContainText("1000%");
   const vector = page.locator(".ink-vector:visible");
   await expect(vector.locator("g path")).toHaveCount(4);
   await expect(vector.locator(":scope > path").first()).not.toHaveAttribute("d", "");
@@ -250,7 +250,7 @@ test("pen levels use even increments and vector paper and ink remain present at 
   await expect(vector.locator("g path")).toHaveCount(3);
   await page.getByRole("button", { name: "Redo ink", exact: true }).click();
   await expect(vector.locator("g path")).toHaveCount(4);
-  await page.screenshot({ path: "artifacts/behavior-vector-500.png" });
+  await page.screenshot({ path: "artifacts/behavior-vector-1000.png" });
 });
 
 test("mobile settings fit small portrait and landscape viewports in both themes", async ({

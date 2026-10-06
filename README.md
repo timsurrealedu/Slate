@@ -2,13 +2,15 @@
 
 A local-first workspace for Markdown, linked notes, paged handwriting, PDFs and DOCX. Slate runs offline on Windows, Linux, Android and the web, with no account required.
 
-The maintained application lives at the repository root. The current local release is **0.1.12**. See [release status](docs/release-status.md) for validation evidence and device limitations.
+The maintained application lives at the repository root. The current local release is **0.1.17**. See [release status](docs/release-status.md) for validation evidence and device limitations.
+
+Keep the latest complete release, one compressed rollback and compact source backups. See [storage retention](docs/storage-retention.md) for the backup policy and retained archives.
 
 ## Features
 
 - Markdown source, live preview and reading, with wiki links, backlinks, tags, Vim, tables and equations.
 - Connected folder vaults, nested folders, search, tabs and recoverable Trash.
-- Paged notebooks with pressure-aware ink, selection transforms, PDF annotation and touch gestures.
+- Paged notebooks with precise ink and rounded joins, optional pen pressure, 1000% zoom, selection transforms, PDF annotation and touch gestures.
 - Saved layout and appearance preferences, local revision history and portable backups.
 - Source-preserving Flexcil import with PDF recovery. Existing Flexcil handwriting and synchronized audio have no verified decoder; see [import findings](docs/flexcil-import.md).
 
@@ -42,7 +44,7 @@ The browser suite starts its own production preview on port 3000. Set `SLATE_TES
 
 **Android:** use JDK 21 and Android SDK platform 36 / build tools 36.0.0, then run `bun run android:build`. The helper builds and synchronizes the web bundle and verifies the debug APK. Android 7 or newer is required. Signed updates use `bun run android:release --password-file /private/path/slate-signing.password`; preserve the existing signing identity and follow [signing instructions](platform/android/SIGNING.md).
 
-Completed local deliveries belong in `releases/<date-description>/`, separate from build staging in `artifacts`. These generated folders are ignored by Git; distribute packages through GitHub Releases. The current local delivery is `releases/2026-10-03-final-polish`.
+Completed local deliveries belong in `releases/<date-description>/`, separate from build staging in `artifacts`. These generated folders are ignored by Git; distribute packages through GitHub Releases. The current local delivery is `releases/2026-10-04-notebook-performance`.
 
 ## Data and recovery
 

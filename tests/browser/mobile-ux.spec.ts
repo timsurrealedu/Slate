@@ -128,7 +128,7 @@ test("library swipes open and close navigation with a bottom-button alternative"
   await page.screenshot({ path: "artifacts/mobile-ux-library.png" });
 });
 
-test("notebook zoom reaches 500 percent without blank frames and Fine ink is thinner", async ({
+test("notebook zoom reaches 1000 percent without blank frames and Fine ink is thinner", async ({
   page,
   context,
 }) => {
@@ -153,7 +153,7 @@ test("notebook zoom reaches 500 percent without blank frames and Fine ink is thi
       const state = (window as any).inkFrames;
       if (state.stopped) return;
       state.frames++;
-      const vector = canvas.previousElementSibling as SVGSVGElement;
+      const vector = canvas.parentElement!.querySelector(".ink-vector") as SVGSVGElement;
       if (!vector?.isConnected || !vector.querySelector("g path")?.getAttribute("d")) state.blank++;
       requestAnimationFrame(sample);
     };
@@ -161,10 +161,10 @@ test("notebook zoom reaches 500 percent without blank frames and Fine ink is thi
   });
   const viewport = page.locator(".page-viewport:visible");
   await viewport.dispatchEvent("wheel", { ctrlKey: true, deltaY: -4000 });
-  await expect(page.locator(".zoom-control")).toContainText("500%");
+  await expect(page.locator(".zoom-control")).toContainText("1000%");
   await expect(page.getByRole("button", { name: "Zoom in", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Zoom out", exact: true }).click();
-  await expect(page.locator(".zoom-control")).toContainText("490%");
+  await expect(page.locator(".zoom-control")).toContainText("990%");
   await viewport.dispatchEvent("wheel", { ctrlKey: true, deltaY: 4000 });
   await expect(page.locator(".zoom-control")).toContainText("50%");
   await page.getByTitle("Fit page width", { exact: true }).click();

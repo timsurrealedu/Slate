@@ -169,6 +169,7 @@
   padding: 29px 30px 115px;
   position: relative;
   overscroll-behavior: contain;
+  touch-action: none;
   overflow-anchor: none;
   background: #e9ecf0;
 }
@@ -193,17 +194,28 @@
   visibility: hidden;
 }
 .ink-canvas,
+.ink-raster,
 .ink-vector,
+.ink-live-vector,
 .pdf-canvas {
   position: absolute;
   top: 0;
   left: 0;
   display: block;
 }
-.ink-vector {
+.ink-raster {
+  visibility: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+.ink-vector,
+.ink-live-vector {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  contain: strict;
+  /* Keep completed ink cached while the independent live layer changes. */
+  will-change: transform;
 }
 .ink-tool-pen,
 .ink-tool-highlighter {

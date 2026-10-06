@@ -8,7 +8,13 @@ import {
   useImperativeHandle,
 } from "react";
 import type { Page, Point, Stroke } from "../core/model";
-import { strokePath } from "./render";
+import {
+  drawLiveStroke,
+  drawStroke,
+  releaseStrokeGeometry,
+  strokePath,
+  strokePathChunks,
+} from "./render";
 import {
   bounds,
   contains,
@@ -31,12 +37,13 @@ interface Props {
   color: string;
   width: number;
   touchInk: boolean;
+  penPressure: boolean;
   transparent?: boolean;
   onChange(strokes: Stroke[]): void;
   onHistory?(undo: boolean, redo: boolean, selection: boolean): void;
   onPinch?(factor: number, x: number, y: number, previousX: number, previousY: number): void;
   onPinchStart?(x: number, y: number): void;
-  onPinchEnd?(): void;
+  onPinchEnd?(immediate?: boolean): void;
 }
 interface Gesture {
   pointerType: string;
@@ -51,11 +58,15 @@ interface Gesture {
   scrollY: number;
   clientX: number;
   clientY: number;
+  rawTime?: number;
+  rawSamples?: Point[];
 }
 export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props, forwardedRef) {
   const canvasRef = useRef<HTMLCanvasElement>(null),
+    rasterRef = useRef<HTMLCanvasElement>(null),
+    liveRasterRef = useRef<HTMLCanvasElement>(null),
     inkRef = useRef<SVGGElement>(null),
-    liveInkRef = useRef<SVGPathElement>(null),
+    liveInkRef = useRef<SVGGElement>(null),
     propsRef = useRef(props);
   const patternId = useId();
   const paperLines = useMemo(() => {
@@ -72,6 +83,29 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
   const runtime = useRef({
     vectorStrokes: null as Stroke[] | null,
     vectorPaths: new Map<string, { element: SVGPathElement; stroke: Stroke }>(),
+    liveStroke: null as Stroke | null,
+    livePaths: [] as SVGPathElement[],
+    liveChunks: [] as string[],
+    livePoints: 0,
+    liveRasterStroke: null as Stroke | null,
+    liveRasterPoints: 0,
+    liveRasterPressure: 0.5,
+    appendFrom: -1,
+    rasterStrokes: null as Stroke[] | null,
+    rasterRect: null as Rect | null,
+    rasterDirty: true,
+    rasterScrolled: false,
+    rasterActive: false,
+    rasterBounds: new WeakMap<Stroke, Rect | null>(),
+    rasterTimer: 0 as ReturnType<typeof setTimeout> | 0,
+    pageShape: null as {
+      width: number;
+      height: number;
+      paper: Page["paper"];
+      transparent?: boolean;
+    } | null,
+    inputRect: null as DOMRect | null,
+    selectionPainted: false,
     strokes: props.page.strokes,
     history: [] as Stroke[][],
     future: [] as Stroke[][],
@@ -79,7 +113,9 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     selection: new Set<string>(),
     rect: null as Rect | null,
     frame: 0,
+    pan: null as { x: number; y: number } | null,
     touches: new Map<number, { x: number; y: number }>(),
+    rejectedTouches: new Set<number>(),
     pinchDistance: 0,
     penUntil: 0,
     twoFinger: null as {
@@ -100,8 +136,11 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     const r = runtime.current;
     propsRef.current.onHistory?.(!!r.history.length, !!r.future.length, !!r.selection.size);
   }
-  function commit(strokes: Stroke[]) {
+  function commit(strokes: Stroke[], append = false) {
     const r = runtime.current;
+    if (append) {
+      if (r.appendFrom < 0 && r.vectorStrokes === r.strokes) r.appendFrom = r.strokes.length;
+    } else r.appendFrom = -1;
     r.history.push(r.strokes);
     if (r.history.length > 80) r.history.shift();
     r.future = [];
@@ -113,6 +152,9 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
   function resize() {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    runtime.current.inputRect = null;
+    runtime.current.rasterDirty = true;
+    clearLiveInk();
     const { page } = propsRef.current;
     const displayed = canvas.getBoundingClientRect().width;
     if (!displayed) return;
@@ -140,8 +182,179 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     paint();
   }
   function redrawBase(defer = true) {
-    runtime.current.vectorStrokes = null;
     if (defer) schedule();
+  }
+  function rasterMode(active: boolean) {
+    const r = runtime.current;
+    if (r.rasterTimer) clearTimeout(r.rasterTimer);
+    r.rasterTimer = 0;
+    r.rasterActive = active;
+    const ready = active && !!r.rasterRect;
+    if (inkRef.current) inkRef.current.style.display = ready ? "none" : "";
+    if (rasterRef.current) rasterRef.current.style.visibility = ready ? "visible" : "hidden";
+  }
+  function sizeRaster(
+    raster: HTMLCanvasElement,
+    b: DOMRect,
+    viewport: DOMRect,
+    ctx: CanvasRenderingContext2D,
+  ) {
+    const density = Math.min(window.devicePixelRatio || 1, 2);
+    const whole =
+      b.width * b.height * density * density <= 4_000_000 &&
+      Math.max(b.width, b.height) * density <= 4096;
+    const x = whole ? 0 : Math.max(0, Math.min(b.width - 1, viewport.left - b.left - 192)),
+      y = whole ? 0 : Math.max(0, Math.min(b.height - 1, viewport.top - b.top - 192));
+    const width = whole
+      ? b.width
+      : Math.max(1, Math.min(b.width - x, viewport.right - b.left + 192 - x));
+    const height = whole
+      ? b.height
+      : Math.max(1, Math.min(b.height - y, viewport.bottom - b.top + 192 - y));
+    const ratio = Math.min(
+      density,
+      4096 / Math.max(width, height),
+      Math.sqrt(4_000_000 / (width * height)),
+    );
+    const scale = b.width / propsRef.current.page.width;
+    const pixelWidth = Math.ceil(width * ratio),
+      pixelHeight = Math.ceil(height * ratio);
+    if (raster.width !== pixelWidth) raster.width = pixelWidth;
+    if (raster.height !== pixelHeight) raster.height = pixelHeight;
+    Object.assign(raster.style, {
+      left: x + "px",
+      top: y + "px",
+      width: width + "px",
+      height: height + "px",
+    });
+    const ratioX = raster.width / width,
+      ratioY = raster.height / height;
+    ctx.setTransform(ratioX * scale, 0, 0, ratioY * scale, -x * ratioX, -y * ratioY);
+    return { x: x / scale, y: y / scale, width: width / scale, height: height / scale };
+  }
+  function clearLiveInk() {
+    const r = runtime.current,
+      stroke = r.liveRasterStroke;
+    if (!stroke) return;
+    const box = bounds([stroke]);
+    if (box)
+      liveRasterRef.current
+        ?.getContext("2d")
+        ?.clearRect(
+          box.x - stroke.width - 2,
+          box.y - stroke.width - 2,
+          box.width + stroke.width * 2 + 4,
+          box.height + stroke.width * 2 + 4,
+        );
+    r.liveRasterStroke = null;
+  }
+  function paintInputInk() {
+    const r = runtime.current,
+      stroke = r.gesture?.stroke,
+      raster = liveRasterRef.current;
+    if (!stroke || !raster) return;
+    const ctx = raster.getContext("2d", { desynchronized: true });
+    if (!ctx) {
+      paintLiveInk();
+      return;
+    }
+    if (stroke !== r.liveRasterStroke) {
+      clearLiveInk();
+      const b = r.inputRect ?? canvasRef.current!.getBoundingClientRect();
+      sizeRaster(
+        raster,
+        b,
+        canvasRef.current!.closest(".page-viewport")!.getBoundingClientRect(),
+        ctx,
+      );
+      r.liveRasterStroke = stroke;
+      r.liveRasterPoints = 0;
+      r.liveRasterPressure = stroke.points[0].p;
+      // Composite transparency once for the whole stroke, including retracing and batch overlaps.
+      raster.style.opacity = stroke.tool === "highlighter" ? "0.3" : "1";
+      raster.style.visibility = "visible";
+      if (liveInkRef.current) liveInkRef.current.style.display = "none";
+    }
+    if (r.liveRasterPoints < stroke.points.length) {
+      r.liveRasterPressure = drawLiveStroke(ctx, stroke, r.liveRasterPoints, r.liveRasterPressure);
+      r.liveRasterPoints = stroke.points.length;
+    }
+  }
+  function paintRaster(strokes: Stroke[], appendFrom: number) {
+    const raster = rasterRef.current,
+      canvas = canvasRef.current,
+      r = runtime.current;
+    if (!raster || !canvas) return;
+    const ctx = raster.getContext("2d")!;
+    let start = appendFrom;
+    if (r.rasterScrolled && r.rasterRect && !r.rasterDirty) {
+      const page = propsRef.current.page,
+        cached = r.rasterRect;
+      if (
+        cached.x > 0 ||
+        cached.y > 0 ||
+        cached.width < page.width ||
+        cached.height < page.height
+      ) {
+        const b = canvas.getBoundingClientRect(),
+          v = canvas.closest(".page-viewport")!.getBoundingClientRect();
+        const scale = b.width / page.width;
+        const left = Math.max(0, v.left - b.left) / scale,
+          top = Math.max(0, v.top - b.top) / scale;
+        const right = Math.min(b.width, v.right - b.left) / scale,
+          bottom = Math.min(b.height, v.bottom - b.top) / scale;
+        r.rasterDirty =
+          left < cached.x ||
+          top < cached.y ||
+          right > cached.x + cached.width ||
+          bottom > cached.y + cached.height;
+      }
+    }
+    r.rasterScrolled = false;
+    if (r.rasterDirty || !r.rasterRect) {
+      const b = canvas.getBoundingClientRect();
+      if (!b.width) return;
+      const viewport = canvas.closest(".page-viewport")!.getBoundingClientRect();
+      // Ordinary pages fit in the bounded cache. At high zoom, reuse a generous visible slice.
+      r.rasterRect = sizeRaster(raster, b, viewport, ctx);
+      ctx.save();
+      ctx.resetTransform();
+      ctx.clearRect(0, 0, raster.width, raster.height);
+      ctx.restore();
+      r.rasterDirty = false;
+      start = 0;
+    } else if (strokes !== r.rasterStrokes && start < 0) {
+      ctx.save();
+      ctx.resetTransform();
+      ctx.clearRect(0, 0, raster.width, raster.height);
+      ctx.restore();
+      start = 0;
+    }
+    if (strokes !== r.rasterStrokes || start === 0) {
+      for (let i = Math.max(0, start); i < strokes.length; i++) {
+        const stroke = strokes[i];
+        if (!r.rasterBounds.has(stroke)) r.rasterBounds.set(stroke, bounds([stroke]));
+        const box = r.rasterBounds.get(stroke);
+        if (
+          box &&
+          intersects(
+            {
+              x: box.x - strokes[i].width,
+              y: box.y - strokes[i].width,
+              width: box.width + strokes[i].width * 2,
+              height: box.height + strokes[i].width * 2,
+            },
+            r.rasterRect!,
+          )
+        )
+          drawStroke(ctx, strokes[i]);
+      }
+      r.rasterStrokes = strokes;
+    }
+    if (r.rasterActive) {
+      if (inkRef.current) inkRef.current.style.display = "none";
+      raster.style.visibility = "visible";
+    }
   }
   function paintInk() {
     const r = runtime.current,
@@ -150,35 +363,82 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       live = liveInkRef.current;
     if (!group || !live) return;
     const strokes = g?.changed || r.strokes;
+    const changed = strokes !== r.vectorStrokes;
+    const appendFrom = strokes !== r.vectorStrokes && !g?.changed ? r.appendFrom : -1;
     if (strokes !== r.vectorStrokes) {
-      const ids = new Set(strokes.map((s) => s.id));
-      for (const id of r.vectorPaths.keys()) if (!ids.has(id)) r.vectorPaths.delete(id);
-      group.replaceChildren(
-        ...strokes.map((stroke) => {
-          let path = r.vectorPaths.get(stroke.id);
-          if (!path) {
-            path = {
-              element: document.createElementNS("http://www.w3.org/2000/svg", "path"),
-              stroke,
-            };
-            r.vectorPaths.set(stroke.id, path);
-            path.element.setAttribute("d", strokePath(stroke));
-            path.element.setAttribute("fill", stroke.color);
-            path.element.setAttribute("opacity", stroke.tool === "highlighter" ? "0.3" : "1");
-          } else if (path.stroke !== stroke) {
-            path.stroke = stroke;
-            path.element.setAttribute("d", strokePath(stroke));
-            path.element.setAttribute("fill", stroke.color);
+      if (appendFrom < 0) {
+        const ids = new Set(strokes.map((s) => s.id));
+        for (const [id, path] of r.vectorPaths) {
+          if (!ids.has(id)) {
+            path.element.remove();
+            r.vectorPaths.delete(id);
           }
-          return path.element;
-        }),
-      );
+        }
+      }
+      let cursor = appendFrom < 0 ? group.firstChild : null;
+      for (let i = Math.max(0, appendFrom); i < strokes.length; i++) {
+        const stroke = strokes[i];
+        let path = r.vectorPaths.get(stroke.id);
+        if (!path) {
+          path = {
+            element:
+              r.liveStroke === stroke && r.livePaths.length === 1
+                ? r.livePaths[0]
+                : document.createElementNS("http://www.w3.org/2000/svg", "path"),
+            stroke,
+          };
+          r.vectorPaths.set(stroke.id, path);
+          path.element.setAttribute("d", strokePath(stroke));
+          path.element.setAttribute("fill", stroke.color);
+          path.element.setAttribute("opacity", stroke.tool === "highlighter" ? "0.3" : "1");
+        } else if (path.stroke !== stroke) {
+          path.stroke = stroke;
+          path.element.setAttribute("d", strokePath(stroke));
+          path.element.setAttribute("fill", stroke.color);
+        }
+        // Existing paths stay attached. A pen lift appends only the new stroke.
+        if (path.element !== cursor) group.insertBefore(path.element, cursor);
+        cursor = path.element.nextSibling;
+      }
       r.vectorStrokes = strokes;
     }
-    live.setAttribute("d", g?.stroke ? strokePath(g.stroke) : "");
-    if (g?.stroke) {
-      live.setAttribute("fill", g.stroke.color);
-      live.setAttribute("opacity", g.stroke.tool === "highlighter" ? "0.3" : "1");
+    paintRaster(strokes, appendFrom);
+    if (changed)
+      for (let i = Math.max(0, appendFrom); i < strokes.length; i++)
+        releaseStrokeGeometry(strokes[i]);
+    r.appendFrom = -1;
+    paintLiveInk();
+  }
+  function paintLiveInk() {
+    const r = runtime.current,
+      live = liveInkRef.current;
+    if (!live) return;
+    const g = r.gesture;
+    const stroke = g?.stroke || null;
+    if (stroke !== r.liveStroke) {
+      live.replaceChildren();
+      r.livePaths = [];
+      r.liveChunks = [];
+      r.livePoints = 0;
+      r.liveStroke = stroke;
+      if (stroke) {
+        live.setAttribute("fill", stroke.color);
+        // Apply transparency to the whole stroke, including overlapping chunks.
+        live.setAttribute("opacity", stroke.tool === "highlighter" ? "0.3" : "1");
+      }
+    }
+    if (stroke) {
+      const chunks = strokePathChunks(stroke);
+      for (let i = Math.floor(r.livePoints / 64); i < chunks.length; i++) {
+        if (r.liveChunks[i] === chunks[i]) continue;
+        const path =
+          r.livePaths[i] ?? document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", chunks[i]);
+        if (!r.livePaths[i]) live.appendChild(path);
+        r.livePaths[i] = path;
+        r.liveChunks[i] = chunks[i];
+      }
+      r.livePoints = stroke.points.length;
     }
   }
   function paint() {
@@ -186,7 +446,27 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r = runtime.current;
     r.frame = 0;
     if (!canvas) return;
+    if (r.pan) {
+      const viewport = canvas.closest(".page-viewport") as HTMLElement;
+      viewport.scrollTo({ left: r.pan.x, top: r.pan.y, behavior: "instant" });
+      r.pan = null;
+      r.inputRect = null;
+      r.rasterScrolled = true;
+    }
     paintInk();
+    if (r.gesture?.stroke) paintInputInk();
+    else {
+      if (liveRasterRef.current) liveRasterRef.current.style.visibility = "hidden";
+      if (liveInkRef.current) liveInkRef.current.style.display = "";
+    }
+    const g = r.gesture;
+    let rect =
+      r.rect || (r.selection.size ? bounds(r.strokes.filter((s) => r.selection.has(s.id))) : null);
+    if (r.selection.size && (g?.mode === "move" || g?.mode === "resize" || g?.mode === "rotate"))
+      rect = bounds((g.changed || g.original).filter((s) => r.selection.has(s.id)));
+    // Drawing does not need to clear a page-sized selection buffer on every frame.
+    if (!rect && !r.selectionPainted) return;
+    r.selectionPainted = !!rect;
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
@@ -194,10 +474,6 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       canvas.width / propsRef.current.page.width,
       canvas.height / propsRef.current.page.height,
     );
-    const g = r.gesture;
-    let rect = r.rect || bounds(r.strokes.filter((s) => r.selection.has(s.id)));
-    if (g?.mode === "move" || g?.mode === "resize" || g?.mode === "rotate")
-      rect = bounds((g.changed || g.original).filter((s) => r.selection.has(s.id)));
     if (rect) {
       ctx.strokeStyle = getComputedStyle(canvas).getPropertyValue("--accent").trim();
       ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--accent-wash").trim();
@@ -243,6 +519,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       old = r.history.pop();
     if (!old) return;
     r.future.push(r.strokes);
+    r.appendFrom = -1;
     r.strokes = old;
     r.selection.clear();
     propsRef.current.onChange(old);
@@ -256,6 +533,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       const next = r.future.pop();
       if (!next) return;
       r.history.push(r.strokes);
+      r.appendFrom = -1;
       r.strokes = next;
       r.selection.clear();
       propsRef.current.onChange(next);
@@ -281,6 +559,13 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
   }));
   useLayoutEffect(() => {
     const r = runtime.current;
+    const changed =
+      !r.pageShape ||
+      r.pageId !== props.page.id ||
+      r.pageShape.width !== props.page.width ||
+      r.pageShape.height !== props.page.height ||
+      r.pageShape.paper !== props.page.paper ||
+      r.pageShape.transparent !== props.transparent;
     if (r.pageId !== props.page.id) {
       r.pageHistory.set(r.pageId, { history: r.history, future: r.future });
       r.pageId = props.page.id;
@@ -291,11 +576,24 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r.rect = null;
       r.gesture = null;
       r.touches.clear();
+      r.rejectedTouches.clear();
+      r.pan = null;
       r.twoFinger = null;
       r.lastTap = null;
+      r.appendFrom = -1;
+      rasterMode(false);
     }
     r.strokes = props.page.strokes;
-    resize();
+    r.pageShape = {
+      width: props.page.width,
+      height: props.page.height,
+      paper: props.page.paper,
+      transparent: props.transparent,
+    };
+    if (changed) {
+      r.rasterDirty = true;
+      resize();
+    } else schedule();
     status();
   }, [
     props.page.id,
@@ -310,13 +608,19 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
     const viewport = canvas.closest(".page-viewport") as HTMLElement;
+    const invalidateInputRect = () => {
+      runtime.current.inputRect = null;
+      runtime.current.rasterScrolled = true;
+      if (runtime.current.gesture?.stroke) clearLiveInk();
+      schedule();
+    };
     const point = (e: PointerEvent): Point => {
-      const b = canvas.getBoundingClientRect(),
+      const b = (runtime.current.inputRect ??= canvas.getBoundingClientRect()),
         p = propsRef.current.page;
       return {
         x: ((e.clientX - b.left) * p.width) / b.width,
         y: ((e.clientY - b.top) * p.height) / b.height,
-        p: e.pointerType === "pen" ? e.pressure || 0.5 : 0.5,
+        p: e.pointerType === "pen" ? e.pressure : 0.5,
         t: e.timeStamp,
       };
     };
@@ -333,24 +637,56 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     function down(e: PointerEvent) {
       const r = runtime.current,
         p = propsRef.current;
-      if (e.pointerType === "touch" && r.gesture?.pointerType === "pen") return;
-      if (e.pointerType === "touch" && performance.now() < r.penUntil && !r.touches.size) {
-        // Reject a lone palm near the nib, but let a second finger start an intentional gesture.
-        r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const onPaper = e.target === canvas;
+      if (
+        !onPaper &&
+        (e.pointerType !== "touch" || (e.target as Element).closest("button,input,a,[role=button]"))
+      )
+        return;
+      if (
+        e.pointerType === "touch" &&
+        (r.gesture?.pointerType === "pen" ||
+          performance.now() < r.penUntil ||
+          e.width > 40 ||
+          e.height > 40)
+      ) {
+        // A contact rejected near a pen stays a palm until it lifts, including between letters.
+        r.rejectedTouches.add(e.pointerId);
+        if (e.cancelable) e.preventDefault();
         return;
       }
+      if (e.pointerType === "pen" || (e.pointerType === "touch" && p.touchInk)) {
+        // Settle entry motion before capturing coordinates: paper must stay under the nib.
+        const shell = canvas.closest(".document-shell");
+        for (const animation of shell?.getAnimations() || []) {
+          const last = (animation.effect as KeyframeEffect | null)?.getKeyframes().at(-1);
+          if (animation.playState === "running" && last?.transform === "none") animation.finish();
+        }
+        const app = canvas.closest(".slate-app");
+        for (const element of app?.querySelectorAll(".workspace-topbar-slot, .workspace-topbar") ||
+          [])
+          for (const animation of element.getAnimations())
+            if (animation.playState === "running") animation.finish();
+      }
+      r.inputRect = null;
       if (e.pointerType === "pen" && r.gesture?.pointerType === "touch") {
         // A palm that lands before the nib must not leave ink or shift the paper.
+        const g = r.gesture;
+        if (g.mode === "pan") {
+          r.pan = null;
+          if (e.timeStamp - g.start.t < 350)
+            viewport.scrollTo({ left: g.scrollX, top: g.scrollY, behavior: "instant" });
+          r.rasterScrolled = true;
+        }
         r.gesture = null;
         r.rect = null;
-        r.twoFinger = null;
         r.lastTap = null;
-        r.touches.clear();
         redrawBase();
       }
       if (e.pointerType === "pen") {
-        if (r.twoFinger) p.onPinchEnd?.();
+        if (r.twoFinger) p.onPinchEnd?.(true);
         r.penUntil = performance.now() + 350;
+        for (const id of r.touches.keys()) r.rejectedTouches.add(id);
         r.touches.clear();
         r.twoFinger = null;
         r.lastTap = null;
@@ -367,6 +703,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           r.pinchDistance = Math.hypot(a.x - b.x, a.y - b.y);
           const x = (a.x + b.x) / 2,
             y = (a.y + b.y) / 2;
+          rasterMode(false);
           p.onPinchStart?.(x, y);
           r.twoFinger = {
             started: e.timeStamp,
@@ -388,8 +725,10 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       canvas.setPointerCapture(e.pointerId);
       canvas.focus({ preventScroll: true });
       const start = point(e),
-        selection = bounds(r.strokes.filter((s) => r.selection.has(s.id)));
-      const unit = p.page.width / canvas.getBoundingClientRect().width;
+        selection = r.selection.size
+          ? bounds(r.strokes.filter((s) => r.selection.has(s.id)))
+          : null;
+      const unit = p.page.width / r.inputRect!.width;
       const near = (x: number, y: number) => Math.hypot(start.x - x, start.y - y) < 12 * unit;
       const resizeHandle =
         selection &&
@@ -402,7 +741,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       const rotateHandle =
         selection && near(selection.x + selection.width / 2, selection.y - 28 * unit);
       const mode =
-        p.tool === "hand" || (e.pointerType === "touch" && !p.touchInk)
+        p.tool === "hand" || (e.pointerType === "touch" && (!p.touchInk || !onPaper))
           ? "pan"
           : e.buttons === 32 || p.tool === "eraser"
             ? "erase"
@@ -434,8 +773,11 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           color: p.color,
           width: p.tool === "highlighter" ? 14 + ((p.width - 0.6) / 0.6) * 2 : p.width,
           points: [start],
-          rendering: "direct",
+          rendering: "precise",
+          pressureSensitive: p.penPressure,
         };
+      rasterMode(mode === "draw" || mode === "pan");
+      if (mode === "draw") paintInputInk();
       if (mode === "erase") erase(start.x, start.y);
       if (mode === "select") {
         r.selection.clear();
@@ -449,7 +791,11 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     }
     function move(e: PointerEvent) {
       const r = runtime.current;
-      if (e.pointerType === "pen") r.penUntil = performance.now() + 350;
+      if (r.rejectedTouches.has(e.pointerId)) {
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
+      if (e.pointerType === "pen" && e.buttons) r.penUntil = performance.now() + 350;
       if (r.touches.has(e.pointerId)) {
         r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (r.touches.size > 1) {
@@ -468,8 +814,11 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
             if (propsRef.current.onPinch && r.pinchDistance > 0 && distance > 10) {
               propsRef.current.onPinch(distance / r.pinchDistance, x, y, two.x, two.y);
             } else if (viewport) {
-              viewport.scrollLeft -= x - two.x;
-              viewport.scrollTop -= y - two.y;
+              r.pan = {
+                x: (r.pan?.x ?? viewport.scrollLeft) - x + two.x,
+                y: (r.pan?.y ?? viewport.scrollTop) - y + two.y,
+              };
+              schedule();
             }
             two.x = x;
             two.y = y;
@@ -481,25 +830,48 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       }
       const g = r.gesture;
       if (!g || g.id !== e.pointerId) return;
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       if (g.mode === "pan") {
         if (viewport) {
-          viewport.scrollLeft = g.scrollX - e.clientX + g.clientX;
-          viewport.scrollTop = g.scrollY - e.clientY + g.clientY;
+          r.pan = { x: g.scrollX - e.clientX + g.clientX, y: g.scrollY - e.clientY + g.clientY };
+          schedule();
         }
         return;
       }
-      const samples = [...(e.getCoalescedEvents?.() || []), e];
-      for (const sample of samples.length ? samples : [e]) {
+      const coalesced = e.getCoalescedEvents?.();
+      // The parent is a processed summary, not an extra hardware sample.
+      const samples = coalesced?.length ? coalesced : [e];
+      if (
+        g.mode === "draw" &&
+        e.type === "pointermove" &&
+        !coalesced?.length &&
+        e.timeStamp <= (g.rawTime ?? -1)
+      )
+        return;
+      const raw = e.type === "pointermove" ? g.rawSamples || [] : [];
+      let rawIndex = 0;
+      for (const sample of samples) {
         const next = point(sample);
         if (g.mode === "draw") {
+          // Compare hardware samples, not parent dispatch times, when raw and move batches overlap.
+          while (rawIndex < raw.length && raw[rawIndex].t < next.t) rawIndex++;
+          const seen = raw[rawIndex];
+          if (
+            seen &&
+            seen.t === next.t &&
+            seen.x === next.x &&
+            seen.y === next.y &&
+            seen.p === next.p
+          ) {
+            rawIndex++;
+            continue;
+          }
+          if (e.type === "pointerrawupdate") (g.rawSamples ??= []).push(next);
           const points = g.stroke!.points,
             last = points[points.length - 1];
-          if (
-            Math.hypot(next.x - last.x, next.y - last.y) > 0.001 ||
-            Math.abs(next.p - last.p) > 0.02
-          )
-            points.push(next);
+          // A delayed sample must not draw backwards through already received input.
+          if (next.t < last.t) continue;
+          if (next.x !== last.x || next.y !== last.y || next.p !== last.p) points.push(next);
         } else if (g.mode === "erase") erase(next.x, next.y);
         else if (g.mode === "select")
           r.rect = {
@@ -537,14 +909,28 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           );
         }
       }
+      if (e.type === "pointerrawupdate") g.rawTime = samples.at(-1)!.timeStamp;
+      if (e.type === "pointermove") g.rawSamples = undefined;
+      // Paint only new ink now; completed ink, vectors and UI work remain frame-batched.
+      if (g.mode === "draw") paintInputInk();
       schedule();
+    }
+    function raw(event: Event) {
+      const e = event as PointerEvent;
+      if (e.pointerType === "pen" && runtime.current.gesture?.mode === "draw") move(e);
     }
     function finish(e?: PointerEvent) {
       const r = runtime.current;
       if (e) {
+        if (r.rejectedTouches.has(e.pointerId)) {
+          if (e.type === "pointerup" || e.type === "pointercancel")
+            r.rejectedTouches.delete(e.pointerId);
+          return;
+        }
+        const touch = r.touches.has(e.pointerId);
         r.touches.delete(e.pointerId);
         if (r.touches.size < 2) r.pinchDistance = 0;
-        if (r.twoFinger) {
+        if (touch && r.twoFinger) {
           if (r.touches.size === 0) {
             propsRef.current.onPinchEnd?.();
             const two = r.twoFinger;
@@ -566,16 +952,22 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       }
       const g = r.gesture;
       if (!g || (e && g.id !== e.pointerId)) return;
+      if (g.pointerType === "pen") r.penUntil = performance.now() + 350;
       if (e?.type === "pointerup" && g.mode === "draw" && g.stroke) {
         const last = g.stroke.points[g.stroke.points.length - 1],
           next = point(e);
         // Lift-off reports zero pressure; keep the contact's width at its final coordinate.
         if (!e.pressure) next.p = last.p;
-        if (Math.hypot(next.x - last.x, next.y - last.y) > 0.001) g.stroke.points.push(next);
+        if (next.x !== last.x || next.y !== last.y) g.stroke.points.push(next);
+        paintInputInk();
       }
       r.gesture = null;
-      if (g.mode === "draw" && g.stroke) commit([...g.original, g.stroke]);
-      else if (
+      if (g.mode === "draw" && g.stroke) {
+        commit([...g.original, g.stroke], true);
+        r.rasterTimer = setTimeout(() => rasterMode(false), 1500);
+      } else if (g.mode === "pan") {
+        r.rasterTimer = setTimeout(() => rasterMode(false), 250);
+      } else if (
         g.changed &&
         g.changed !== g.original &&
         (g.mode === "erase" || g.mode === "move" || g.mode === "resize" || g.mode === "rotate")
@@ -593,31 +985,53 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     }
     function cancel(e: PointerEvent) {
       const r = runtime.current;
+      if (r.rejectedTouches.delete(e.pointerId)) return;
+      if (
+        r.gesture?.id === e.pointerId &&
+        r.gesture.pointerType === "pen" &&
+        r.gesture.mode === "draw"
+      ) {
+        finish(e);
+        return;
+      }
+      if (!r.touches.has(e.pointerId) && r.gesture?.id !== e.pointerId) return;
       if (r.twoFinger) propsRef.current.onPinchEnd?.();
       r.touches.delete(e.pointerId);
       r.twoFinger = null;
       r.lastTap = null;
       r.pinchDistance = 0;
+      r.pan = null;
       if (r.gesture?.id === e.pointerId) {
         r.gesture = null;
         r.rect = null;
         redrawBase();
       }
     }
-    canvas.addEventListener("pointerdown", down);
-    canvas.addEventListener("pointermove", move);
-    canvas.addEventListener("pointerup", finish);
-    canvas.addEventListener("pointercancel", cancel);
-    canvas.addEventListener("lostpointercapture", finish);
+    const wheel = (e: WheelEvent) => {
+      if (runtime.current.gesture?.pointerType === "pen" && runtime.current.gesture.mode === "draw")
+        e.preventDefault();
+    };
+    viewport.addEventListener("pointerdown", down);
+    viewport.addEventListener("pointermove", move);
+    viewport.addEventListener("pointerrawupdate", raw);
+    viewport.addEventListener("pointerup", finish);
+    viewport.addEventListener("pointercancel", cancel);
+    viewport.addEventListener("lostpointercapture", finish);
+    viewport.addEventListener("wheel", wheel, { passive: false, capture: true });
+    viewport?.addEventListener("scroll", invalidateInputRect, { passive: true });
     return () => {
       observer.disconnect();
+      if (runtime.current.rasterTimer) clearTimeout(runtime.current.rasterTimer);
       cancelAnimationFrame(runtime.current.frame);
       runtime.current.frame = 0;
-      canvas.removeEventListener("pointerdown", down);
-      canvas.removeEventListener("pointermove", move);
-      canvas.removeEventListener("pointerup", finish);
-      canvas.removeEventListener("pointercancel", cancel);
-      canvas.removeEventListener("lostpointercapture", finish);
+      viewport.removeEventListener("pointerdown", down);
+      viewport.removeEventListener("pointermove", move);
+      viewport.removeEventListener("pointerrawupdate", raw);
+      viewport.removeEventListener("pointerup", finish);
+      viewport.removeEventListener("pointercancel", cancel);
+      viewport.removeEventListener("lostpointercapture", finish);
+      viewport.removeEventListener("wheel", wheel, true);
+      viewport?.removeEventListener("scroll", invalidateInputRect);
     };
   }, []);
   return (
@@ -671,8 +1085,16 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           </>
         )}
         <g ref={inkRef} />
-        <path ref={liveInkRef} />
       </svg>
+      <canvas ref={rasterRef} className="ink-raster" aria-hidden="true" />
+      <svg
+        className="ink-live-vector"
+        viewBox={`0 0 ${props.page.width} ${props.page.height}`}
+        aria-hidden="true"
+      >
+        <g ref={liveInkRef} />
+      </svg>
+      <canvas ref={liveRasterRef} className="ink-raster ink-live-raster" aria-hidden="true" />
       <canvas
         ref={canvasRef}
         className={"ink-canvas ink-tool-" + props.tool}

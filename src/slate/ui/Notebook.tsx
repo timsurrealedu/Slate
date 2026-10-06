@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { prepareInkSave } from "../core/ink-save";
 import {
   MousePointer2,
   Hand,
@@ -31,6 +33,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { getAsset } from "../core/storage";
 import { downloadBlob } from "../platform/export";
 import { loadPdf } from "../documents/files";
+const MAX_ZOOM = 10;
 export function Notebook({
   doc,
   active,
@@ -139,7 +142,7 @@ export function Notebook({
     gesture.paper.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
     if (zoomLabel.current) zoomLabel.current.textContent = `${Math.round(zoomRef.current * 100)}%`;
   }
-  const finishPinch = useCallback(() => {
+  const finishPinch = useCallback((immediate = false) => {
     const gesture = pinch.current;
     if (!gesture) return;
     cancelAnimationFrame(gesture.frame);
@@ -152,7 +155,9 @@ export function Notebook({
       clientY: gesture.clientY,
     };
     // Resize the drawing buffer once, after the composited gesture has finished.
-    setZoomView({ zoom: zoomRef.current });
+    const settle = () => setZoomView({ zoom: zoomRef.current });
+    if (immediate) flushSync(settle);
+    else settle();
   }, []);
   useEffect(() => {
     if (!active) finishPinch();
@@ -164,7 +169,7 @@ export function Notebook({
     previousX = clientX,
     previousY = clientY,
   ) {
-    const next = Math.min(5, Math.max(0.5, zoomRef.current * factor));
+    const next = Math.min(MAX_ZOOM, Math.max(0.5, zoomRef.current * factor));
     const gesture = pinch.current;
     if (gesture) {
       zoomRef.current = next;
@@ -229,6 +234,7 @@ export function Notebook({
     );
     observer.observe(el);
     const wheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return;
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         zoomAt(Math.exp(-e.deltaY / 450), e.clientX, e.clientY);
@@ -302,6 +308,9 @@ export function Notebook({
       canceled = true;
       void loaded?.destroy();
     };
+  }, [doc.id]);
+  useEffect(() => {
+    prepareInkSave(doc);
   }, [doc.id]);
   function updatePage(patch: Partial<Page>) {
     const { doc: d, page: p } = current.current;
@@ -391,8 +400,8 @@ export function Notebook({
           </button>
           <IconButton
             label="Zoom in"
-            disabled={zoom >= 5}
-            onClick={() => zoomFromCenter(Math.min(5, zoom + 0.1))}
+            disabled={zoom >= MAX_ZOOM}
+            onClick={() => zoomFromCenter(Math.min(MAX_ZOOM, zoom + 0.1))}
           >
             <Plus size={14} />
           </IconButton>
@@ -585,9 +594,18 @@ export function Notebook({
                       color={inkColorForPaper(preferences.inkColor, darkPaper)}
                       width={preferences.inkWidth}
                       touchInk={preferences.touchInk}
+                      penPressure={preferences.penPressure}
                       transparent={doc.kind === "pdf"}
                       onChange={(strokes) => updatePage({ strokes })}
-                      onHistory={(undo, redo, selection) => setHistory({ undo, redo, selection })}
+                      onHistory={(undo, redo, selection) =>
+                        setHistory((previous) =>
+                          previous.undo === undo &&
+                          previous.redo === redo &&
+                          previous.selection === selection
+                            ? previous
+                            : { undo, redo, selection },
+                        )
+                      }
                       onPinch={zoomAt}
                       onPinchStart={startPinch}
                       onPinchEnd={finishPinch}

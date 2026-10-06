@@ -296,6 +296,12 @@ export function InkToolbar({
             separator: true,
             onClick: () => void workspace.preferences({ touchInk: !preferences.touchInk }),
           },
+          {
+            label: "Pen pressure sensitivity",
+            icon: <PenLine size={16} />,
+            checked: preferences.penPressure,
+            onClick: () => void workspace.preferences({ penPressure: !preferences.penPressure }),
+          },
           ...(history.selection
             ? [
                 {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Folder,
@@ -30,6 +30,7 @@ import { dragItem, dropInto, type LibraryItem } from "./drag";
 import { parentFolder } from "../core/folders";
 export type LibraryView = "library" | "recent" | "starred" | "trash" | string;
 interface Props {
+  active: boolean;
   documents: SlateDocument[];
   folders: SlateFolder[];
   view: LibraryView;
@@ -48,6 +49,12 @@ interface Props {
   onRestoreFolder(folder: SlateFolder): void;
 }
 export function Library(props: Props) {
+  // Keep the navigation underlay and its state without rebuilding previews for every pen lift.
+  const visible = useRef(props);
+  if (props.active) visible.current = props;
+  return <LibraryContent {...visible.current} />;
+}
+const LibraryContent = memo(function LibraryContent(props: Props) {
   const [filter, setFilter] = useState("all"),
     [sort, setSort] = useState("modified"),
     [grid, setGrid] = useState(false);
@@ -483,4 +490,4 @@ export function Library(props: Props) {
       </div>
     </ContextActions>
   );
-}
+});

@@ -1,18 +1,33 @@
 import { useEffect, useRef } from "react";
 import { Check } from "lucide-react";
 import { PAPER_COLORS, PAPER_STYLES, type Paper, type Page } from "../core/model";
-import { drawPaper, drawStroke } from "../ink/render";
+import { drawPaper, drawStroke, releaseStrokeGeometry } from "../ink/render";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 export function PaperThumbnail({ page }: { page: Page }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const previous = useRef<Page | null>(null);
   useEffect(() => {
     const c = ref.current!;
-    c.width = 130;
-    c.height = Math.round((130 * page.height) / page.width);
+    const old = previous.current;
+    const append =
+      old &&
+      old.width === page.width &&
+      old.height === page.height &&
+      old.paper === page.paper &&
+      old.strokes.length <= page.strokes.length &&
+      old.strokes.every((s, i) => s === page.strokes[i]);
+    if (!append) {
+      c.width = 130;
+      c.height = Math.round((130 * page.height) / page.width);
+    }
     const ctx = c.getContext("2d")!;
-    ctx.scale(130 / page.width, 130 / page.width);
-    drawPaper(ctx, page);
-    page.strokes.forEach((s) => drawStroke(ctx, s));
+    ctx.setTransform(130 / page.width, 0, 0, 130 / page.width, 0, 0);
+    if (!append) drawPaper(ctx, page);
+    page.strokes.slice(append ? old.strokes.length : 0).forEach((s) => {
+      drawStroke(ctx, s);
+      releaseStrokeGeometry(s);
+    });
+    previous.current = page;
   }, [page]);
   return <canvas ref={ref} className="paper-thumbnail" />;
 }

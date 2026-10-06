@@ -1,0 +1,15 @@
+# Notebook ink, zoom and pressure
+
+Slate 0.1.13 / Android versionCode 14 adds smoother new handwriting, zoom up to 1000% and a saved pen pressure sensitivity option. Completed builds are in `releases/2026-10-04-notebook-ink`.
+
+The direct renderer joined every raw sample without stabilization, exposing small input jitter and abrupt pressure changes. New strokes use the existing perfect-freehand renderer to smooth their centerline and outline, with light pressure filtering. Their `smooth` rendering marker and per-stroke `pressureSensitive` flag preserve the result after reload, transformations and backup recovery. Older direct and legacy strokes retain their original rendering. Raw coordinates, pressure and timestamps remain stored; zero contact pressure is retained, lift-off keeps the previous contact width, and delayed samples cannot draw backwards through newer samples.
+
+**Ink options → Pen pressure sensitivity** is a checked menu option, enabled by default. Disabling it fixes the width of subsequent pen strokes. Its preference survives reload and backup recovery; older backups default to pressure enabled. Highlighters always retain a constant width. The notebook and PDF annotation surfaces share this behavior.
+
+Zoom buttons, Ctrl/Command + wheel and pinch share a 1000% maximum. The 50% minimum, fit button, moving pinch anchor and release settlement stay intact. Vector paper and ink remain sharp while selection buffers retain their existing memory bounds.
+
+TypeScript, scoped lint, the independent production build and all 47 unit tests pass. Production browser checks cover actual raster jitter reduction, pressure-driven versus constant widths, genuine zero pressure, persistence, previous-ink retention, coalesced input, palm suppression, coordinate accuracy at 1000%, buffer limits, moving pinch anchors, offline editing, exports and additive recovery. The complete 69-case run passed 67 cases, skipped one optional private Flexcil fixture and timed out once on a library drag check; that check passed on a focused rerun, giving 68 distinct passing workflows. The timeout report and both run reports are retained in the delivery folder.
+
+Windows and Linux packaged applications pass native checks in isolated profiles, including 1000% zoom, the pressure toggle and backup preference, immediate save/close, relaunch and offline reopening. Linux runs through WSLg, with the sandbox disabled only for that test invocation. Physical Android stylus feel, latency, pressure curves and device lifecycle remain unverified. Existing profiles, browser origins and signing identities must be retained when updating.
+
+The menu uses Slate's existing fonts, colors and spacing. The mechanical detector reports no findings in the changed UI files. Hook color findings refer to unchanged paper presets and the existing Rose ink test fixture; they are intentional notebook content, not new design drift. The shared UI is web rendered inside native hosts, which explains Impeccable's platform-label warning. No hook exceptions were added.

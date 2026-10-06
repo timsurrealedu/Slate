@@ -18,7 +18,7 @@ beforeEach(async () => {
   await clearDatabaseForTests();
 });
 describe("local data integrity", () => {
-  it("retains direct and legacy ink plus toolbar preferences through backup recovery", async () => {
+  it("retains all ink renderers and pressure settings through backup recovery", async () => {
     const doc = makeDocument("notebook", "Pen input", null);
     const points = [
       { x: 20, y: 30, p: 0.3, t: 4 },
@@ -27,11 +27,48 @@ describe("local data integrity", () => {
     doc.pages[0].strokes = [
       { id: "direct", rendering: "direct", tool: "pen", color: "#aa6467", width: 0.6, points },
       { id: "legacy", tool: "pen", color: "#385775", width: 1.2, points },
+      {
+        id: "smooth-pressure",
+        rendering: "smooth",
+        pressureSensitive: true,
+        tool: "pen",
+        color: "#385775",
+        width: 1.2,
+        points,
+      },
+      {
+        id: "smooth-fixed",
+        rendering: "smooth",
+        pressureSensitive: false,
+        tool: "pen",
+        color: "#385775",
+        width: 1.2,
+        points,
+      },
+      {
+        id: "precise-pressure",
+        rendering: "precise",
+        pressureSensitive: true,
+        tool: "pen",
+        color: "#385775",
+        width: 1.2,
+        points,
+      },
+      {
+        id: "precise-fixed",
+        rendering: "precise",
+        pressureSensitive: false,
+        tool: "pen",
+        color: "#385775",
+        width: 1.2,
+        points,
+      },
     ];
     const preferences = {
       ...DEFAULT_PREFERENCES,
       inkColor: "#aa6467",
       inkWidth: 0.6,
+      penPressure: false,
       inkToolbarPosition: { x: 0.2, y: 0.3 },
     };
     const parsed = await parseBackup(await exportWorkspace([doc], [], preferences));
@@ -41,8 +78,41 @@ describe("local data integrity", () => {
     expect(restored.documents[0].pages[0].strokes.map((s) => s.rendering)).toEqual([
       "direct",
       undefined,
+      "smooth",
+      "smooth",
+      "precise",
+      "precise",
     ]);
+    expect(restored.documents[0].pages[0].strokes).toEqual(doc.pages[0].strokes);
     expect(restored.documents[0].pages[0].strokes[0].points).toEqual(points);
+  });
+  it("opens older backups with pressure enabled and preserves their saved ink", async () => {
+    const doc = makeDocument("notebook", "Older handwriting", null);
+    doc.pages[0].strokes = [
+      {
+        id: "old",
+        rendering: "direct",
+        tool: "pen",
+        color: "#385775",
+        width: 1.2,
+        points: [
+          { x: 20, y: 30, p: 0, t: 4 },
+          { x: 45, y: 80, p: 0.8, t: 9 },
+        ],
+      },
+    ];
+    const backup = await exportWorkspace([doc], [], DEFAULT_PREFERENCES);
+    const files = unzipSync(new Uint8Array(await backup.arrayBuffer()));
+    const manifest = JSON.parse(strFromU8(files["manifest.json"]));
+    delete manifest.preferences.penPressure;
+    files["manifest.json"] = strToU8(JSON.stringify(manifest));
+    const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", files["manifest.json"]));
+    files["manifest.sha256"] = strToU8(
+      Array.from(hash, (b) => b.toString(16).padStart(2, "0")).join(""),
+    );
+    const parsed = await parseBackup(new Blob([zipSync(files)]));
+    expect(parsed.manifest.preferences.penPressure).toBe(true);
+    expect(parsed.manifest.documents[0].pages[0].strokes).toEqual(doc.pages[0].strokes);
   });
   it("saves atomically and retains an earlier recoverable version", async () => {
     const doc = makeDocument("note", "Physics", null);

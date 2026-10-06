@@ -197,6 +197,9 @@ test("Selection scales and rotates with reversible saved geometry", async ({ pag
     .poll(async () => (await latest(page))?.pages[0].strokes[0].points)
     .toEqual(before.points);
   await page.getByRole("button", { name: "Redo ink", exact: true }).click();
+  await expect
+    .poll(async () => (await latest(page))?.pages[0].strokes[0].width)
+    .toBeCloseTo(before.width * 1.1);
   await page.reload();
   await expect
     .poll(async () => (await latest(page))?.pages[0].strokes[0].width)

@@ -106,16 +106,40 @@ try {
   await expect.poll(async () => (await latest(page))?.content).toContain("$$\n123+45=168\n$$");
   await page.keyboard.press("Control+Shift+n");
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
+  await expect
+    .poll(() => page.workers().filter((worker) => worker.url().includes("ink-save.worker-")).length)
+    .toBeGreaterThan(0);
+  const inkWorker = page.workers().find((worker) => worker.url().includes("ink-save.worker-"));
+  await inkWorker.evaluate(() => {
+    globalThis.__slateInkWrites = 0;
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (this.name === "documents") globalThis.__slateInkWrites++;
+      return put.apply(this, args);
+    };
+  });
   await page.getByRole("button", { name: "Pen (P)", exact: true }).click();
   await page.getByRole("button", { name: "Fine", exact: true }).click();
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Ink options", exact: true }).click();
+  const pressure = page.getByRole("menuitemcheckbox", {
+    name: "Pen pressure sensitivity",
+    exact: true,
+  });
+  await expect(pressure).toHaveAttribute("aria-checked", "true");
+  await pressure.click();
   await draw(page);
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);
+  await expect.poll(() => inkWorker.evaluate(() => globalThis.__slateInkWrites)).toBeGreaterThan(0);
   expect((await latest(page)).pages[0].strokes[0].width).toBe(0.6);
+  expect((await latest(page)).pages[0].strokes[0]).toMatchObject({
+    rendering: "precise",
+    pressureSensitive: false,
+  });
   await page
     .locator(".page-viewport:visible")
     .dispatchEvent("wheel", { ctrlKey: true, deltaY: -4000 });
-  await expect(page.locator(".zoom-control")).toContainText("500%");
+  await expect(page.locator(".zoom-control")).toContainText("1000%");
   await expect(page.getByRole("button", { name: "Zoom in", exact: true })).toBeDisabled();
   await page.getByTitle("Fit page width", { exact: true }).click();
   await instance.evaluate(({ session }, file) => {
@@ -137,14 +161,23 @@ try {
   const files = unzipSync(readFileSync(backup));
   const manifest = JSON.parse(strFromU8(files["manifest.json"]));
   expect(manifest.documents.length).toBe(9);
+  expect(manifest.preferences.penPressure).toBe(false);
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.screenshot({ path: "artifacts/desktop-native.png" });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.context().setOffline(true);
   await page.reload();
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
+  await expect
+    .poll(() => page.workers().filter((worker) => worker.url().includes("ink-save.worker-")).length)
+    .toBeGreaterThan(0);
   expect((await latest(page)).pages[0].strokes.length).toBe(1);
   await page.context().setOffline(false);
+  await page.getByRole("button", { name: "Ink options", exact: true }).click();
+  await expect(pressure).toHaveAttribute("aria-checked", "false");
+  await pressure.focus();
+  await page.keyboard.press("Space");
+  expect((await latest(page)).pages[0].strokes[0].pressureSensitive).toBe(false);
   // A failed save must keep the window alive and allow another close attempt.
   await instance.evaluate(({ dialog }) => {
     globalThis.__slateTestDialogs = { original: dialog.showMessageBox, messages: [] };
@@ -180,7 +213,9 @@ try {
         vaultMenuImport: "pass",
         unifiedHeading: "pass",
         equationKeyboard: "pass",
-        zoom500AndFinePen: "pass",
+        zoom1000AndFinePen: "pass",
+        pressureToggleAndBackup: "pass",
+        backgroundInkSavingAndOfflineWorker: "pass",
         immediateCloseSave: "pass",
         relaunch: "pass",
         ink: "pass",

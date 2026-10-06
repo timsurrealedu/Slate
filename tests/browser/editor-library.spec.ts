@@ -18,6 +18,15 @@ test("touch long-press drag moves a note", async ({ page }) => {
     .getByRole("button", { name: "Library", exact: true })
     .click();
   const row = page.locator(".document-row").filter({ hasText: note.title });
+  await expect(page.locator(".library-pane")).not.toHaveClass(/library-behind/);
+  await row.evaluate(async (element) => {
+    await Promise.all(
+      element
+        .closest(".navigation-stack")!
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => {})),
+    );
+  });
   const target = page.getByRole("button", { name: "Open folder Touch course", exact: true });
   const a = (await row.boundingBox())!,
     b = (await target.boundingBox())!;

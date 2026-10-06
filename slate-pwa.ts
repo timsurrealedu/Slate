@@ -23,6 +23,7 @@ export function slatePwa(): Plugin {
       }
       walk(publicDir);
       files.push("/");
+      files.sort();
       const version =
         "slate-shell-" + createHash("sha256").update(files.join("\n")).digest("hex").slice(0, 12);
       const source = [

@@ -112,7 +112,8 @@ test("pen and highlighter reopen thickness, the single color picker and preferen
   expect((await latest(page)).pages[0].strokes[0]).toMatchObject({
     width: 0.6,
     color: "#aa6467",
-    rendering: "direct",
+    rendering: "precise",
+    pressureSensitive: true,
   });
   await page.reload();
   await expect(toolbar).toBeVisible();
@@ -206,9 +207,10 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
         clientY: box.y + y,
         pressure,
       });
+    const coalesced = [sample(130, 100, 0.4), sample(180, 100, 0.6)];
     const event = sample(220, 100, 0.8);
     Object.defineProperty(event, "getCoalescedEvents", {
-      value: () => [sample(130, 100, 0.4), sample(180, 100, 0.6)],
+      value: () => coalesced,
     });
     element.dispatchEvent(event);
     element.dispatchEvent(
@@ -221,7 +223,7 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
       }),
     );
   }, box);
-  const live = page.locator(".ink-vector:visible > path").last();
+  const live = page.locator(".ink-live-vector:visible g path").first();
   await expect(live).not.toHaveAttribute("d", "");
   const initial = (await live.getAttribute("d"))!;
   await session.send("Input.dispatchMouseEvent", {
@@ -252,7 +254,7 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
   expect(points.at(-1).x).toBeCloseTo((250 * doc.pages[0].width) / box.width, 3);
   expect(points.at(-1).y).toBeCloseTo((240 * doc.pages[0].height) / box.height, 3);
   expect(points.at(-1).p).toBeCloseTo(0.5);
-  // Intentional two-finger zoom still works while the pen is hovering nearby.
+  // Fresh fingers can zoom after the short palm guard, even with the pen hovering nearby.
   await session.send("Input.dispatchMouseEvent", {
     type: "mouseMoved",
     x: box.x + 250,
@@ -260,6 +262,7 @@ test("pen input retains coalesced samples, sharp turns and the lift-off endpoint
     pointerType: "pen",
     buttons: 0,
   });
+  await page.waitForTimeout(360);
   const touches = (distance: number) => [
     { x: box.x + 100, y: box.y + 320, id: 1 },
     { x: box.x + 100 + distance, y: box.y + 320, id: 2 },

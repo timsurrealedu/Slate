@@ -8,6 +8,65 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("workspace recovery", () => {
+  it("flushes queued handwriting immediately for close and backup recovery", async () => {
+    const doc = await workspace.create("notebook");
+    const strokes = Array.from({ length: 50 }, (_, i) => ({
+      id: String(i),
+      tool: "pen" as const,
+      rendering: "precise" as const,
+      color: "#385775",
+      width: 0.6,
+      pressureSensitive: true,
+      points: [{ x: i / 10, y: i / 20, p: i / 50, t: i }],
+    }));
+    for (let i = 1; i <= strokes.length; i++)
+      workspace.update(doc.id, {
+        pages: [{ ...doc.pages[0], strokes: strokes.slice(0, i) }],
+      });
+    expect(workspace.get().saving).toBeGreaterThan(0);
+    await workspace.flush();
+    const saved = (await storage.readWorkspace()).documents.find((d) => d.id === doc.id)!;
+    expect(saved.pages[0].strokes).toEqual(strokes);
+    expect(saved.revision).toBe(2);
+    const backup = await storage.parseBackup(await workspace.backup());
+    expect(backup.manifest.documents.find((d) => d.id === doc.id)!.pages[0].strokes).toEqual(
+      strokes,
+    );
+  });
+  it("autosaves continuous handwriting within a bounded interval", async () => {
+    const doc = await workspace.create("notebook");
+    const save = vi.spyOn(storage, "saveDocument");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      for (let i = 0; i < 7; i++) {
+        workspace.update(doc.id, {
+          pages: [
+            {
+              ...doc.pages[0],
+              strokes: [
+                {
+                  id: "ink",
+                  tool: "pen",
+                  rendering: "precise",
+                  color: "#385775",
+                  width: 0.6,
+                  points: [{ x: i / 10, y: i / 20, p: 0.5, t: i }],
+                },
+              ],
+            },
+          ],
+        });
+        await vi.advanceTimersByTimeAsync(150);
+      }
+      expect(save).toHaveBeenCalledTimes(1);
+      await workspace.flush();
+      const saved = (await storage.readWorkspace()).documents.find((d) => d.id === doc.id)!;
+      expect(saved.pages[0].strokes[0].points[0].x).toBe(0.6);
+    } finally {
+      vi.useRealTimers();
+      save.mockRestore();
+    }
+  });
   (it("recovering one conflict preserves a different unsaved document", async () => {
     const a = await workspace.create("note"),
       b = await workspace.create("note");
