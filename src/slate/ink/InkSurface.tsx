@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useId, useMemo, forwardRef, useImperativeHandle } from "react";
-import type { Page, Point, Stroke } from "../core/model";
+import { isHighlighter, type Page, type PenSlot, type Point, type Stroke } from "../core/model";
 import {
   drawLiveStroke,
   drawStroke,
@@ -16,7 +16,10 @@ import {
   transform,
   type Rect,
 } from "./geometry";
-export type InkTool = "pen" | "highlighter" | "eraser" | "select" | "hand";
+import { brushElement, brushPlan, stabilizer, straighten, UNIT } from "./flexcil";
+import { LiveBrush } from "./live";
+import { MARGIN_RED, paperGeometry } from "./paper";
+export type InkTool = "pen" | "eraser" | "select" | "hand";
 export interface InkHandle {
   undo(): void;
   redo(): void;
@@ -26,8 +29,8 @@ export interface InkHandle {
 interface Props {
   page: Page;
   tool: InkTool;
-  color: string;
-  width: number;
+  pen: PenSlot;
+  eraserWidth: number;
   touchInk: boolean;
   penPressure: boolean;
   transparent?: boolean;
@@ -51,9 +54,50 @@ interface Gesture {
   clientX: number;
   clientY: number;
   rawSamples?: Point[];
+  stabilize?: (point: Point) => Point;
+  straight?: boolean;
+  lasso?: Point[];
+  erased?: Point;
 }
 function penContact(e: PointerEvent) {
   return !!(e.buttons & 33) || e.pressure > 0;
+}
+function addSample(g: Gesture, next: Point) {
+  const points = g.stroke!.points,
+    last = points[points.length - 1];
+  // A delayed sample must not draw backwards through already received input.
+  if (next.t < last.t) return;
+  if (g.straight) {
+    points.splice(1, points.length, straighten(points[0], next));
+    return;
+  }
+  const sample = g.stabilize ? g.stabilize(next) : next;
+  if (sample.x !== last.x || sample.y !== last.y || sample.p !== last.p) points.push(sample);
+}
+function FlexcilPaper({ page }: { page: Page }) {
+  const g = paperGeometry(page);
+  return (
+    <>
+      <rect width={page.width} height={page.height} fill={page.paper.color} />
+      <path d={g.lines} fill="none" stroke={page.paper.lineColor} strokeWidth={g.hairline} />
+      <path d={g.strong} fill="none" stroke={g.strongColor} strokeWidth={g.hairline} />
+      <path d={g.red} fill="none" stroke={MARGIN_RED} strokeWidth={g.rule} />
+      <path d={g.dots} fill={page.paper.lineColor} />
+    </>
+  );
+}
+function replaceElement(previous: SVGElement, next: SVGElement) {
+  if (previous !== next) previous.replaceWith(next);
+  return next;
+}
+function insidePolygon(polygon: Point[], x: number, y: number) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i],
+      b = polygon[j];
+    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
 }
 export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props, forwardedRef) {
   const canvasRef = useRef<HTMLCanvasElement>(null),
@@ -76,7 +120,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
   }, [props.page.width, props.page.height, props.page.paper]);
   const runtime = useRef({
     vectorStrokes: null as Stroke[] | null,
-    vectorPaths: new Map<string, { element: SVGPathElement; stroke: Stroke }>(),
+    vectorPaths: new Map<string, { element: SVGElement; stroke: Stroke }>(),
     liveStroke: null as Stroke | null,
     livePaths: [] as SVGPathElement[],
     liveChunks: [] as string[],
@@ -84,6 +128,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     liveRasterStroke: null as Stroke | null,
     liveRasterPoints: 0,
     liveRasterPressure: 0.5,
+    liveBrush: new LiveBrush(),
     appendFrom: -1,
     rasterAppendFrom: -1,
     rasterStrokes: null as Stroke[] | null,
@@ -273,12 +318,24 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r.liveRasterStroke = stroke;
       r.liveRasterPoints = 0;
       r.liveRasterPressure = stroke.points[0].p;
+      r.liveBrush.reset();
+      const plan = stroke.brush ? brushPlan(stroke) : null;
       // Composite transparency once for the whole stroke, including retracing and batch overlaps.
-      raster.style.opacity = stroke.tool === "highlighter" ? "0.3" : "1";
+      raster.style.opacity = plan
+        ? String(plan.opacity)
+        : stroke.tool === "highlighter"
+          ? "0.3"
+          : "1";
+      const blend = plan ? plan.blend : "normal";
+      raster.style.mixBlendMode = blend === "normal" ? "" : blend;
       raster.style.visibility = "visible";
       if (liveInkRef.current) liveInkRef.current.style.display = "none";
     }
-    if (r.liveRasterPoints < stroke.points.length) {
+    if (stroke.brush) {
+      // Like Flexcil's front buffer, only settled segments are appended; the tail is redrawn.
+      r.liveBrush.draw(ctx, stroke);
+      r.liveRasterPoints = stroke.points.length;
+    } else if (r.liveRasterPoints < stroke.points.length) {
       r.liveRasterPressure = drawLiveStroke(ctx, stroke, r.liveRasterPoints, r.liveRasterPressure);
       r.liveRasterPoints = stroke.points.length;
     }
@@ -392,7 +449,10 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       for (let i = Math.max(0, appendFrom); i < strokes.length; i++) {
         const stroke = strokes[i];
         let path = r.vectorPaths.get(stroke.id);
-        if (!path) {
+        if (!path && stroke.brush) {
+          path = { element: brushElement(stroke), stroke };
+          r.vectorPaths.set(stroke.id, path);
+        } else if (!path) {
           path = {
             element:
               r.liveStroke === stroke && r.livePaths.length === 1
@@ -406,8 +466,12 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           path.element.setAttribute("opacity", stroke.tool === "highlighter" ? "0.3" : "1");
         } else if (path.stroke !== stroke) {
           path.stroke = stroke;
-          path.element.setAttribute("d", strokePath(stroke));
-          path.element.setAttribute("fill", stroke.color);
+          if (stroke.brush)
+            path.element = replaceElement(path.element, brushElement(stroke, path.element));
+          else {
+            path.element.setAttribute("d", strokePath(stroke));
+            path.element.setAttribute("fill", stroke.color);
+          }
         }
         // Existing paths stay attached. A pen lift appends only the new stroke.
         if (path.element !== cursor) group.insertBefore(path.element, cursor);
@@ -449,7 +513,14 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         live.setAttribute("opacity", stroke.tool === "highlighter" ? "0.3" : "1");
       }
     }
-    if (stroke) {
+    if (stroke?.brush) {
+      // Without a 2D context the live stroke is a single regenerated vector group.
+      const element = brushElement(stroke, r.livePaths[0]);
+      if (!r.livePaths.length) live.appendChild(element);
+      live.removeAttribute("opacity");
+      r.livePaths = [element as unknown as SVGPathElement];
+      r.livePoints = stroke.points.length;
+    } else if (stroke) {
       const chunks = strokePathChunks(stroke);
       for (let i = Math.floor(r.livePoints / 64); i < chunks.length; i++) {
         if (r.liveChunks[i] === chunks[i]) continue;
@@ -486,9 +557,10 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r.rect || (r.selection.size ? bounds(r.strokes.filter((s) => r.selection.has(s.id))) : null);
     if (r.selection.size && (g?.mode === "move" || g?.mode === "resize" || g?.mode === "rotate"))
       rect = bounds((g.changed || g.original).filter((s) => r.selection.has(s.id)));
+    const lasso = g?.mode === "select" ? g.lasso : undefined;
     // Drawing does not need to clear a page-sized selection buffer on every frame.
-    if (!rect && !r.selectionPainted) return;
-    r.selectionPainted = !!rect;
+    if (!rect && !lasso && !r.selectionPainted) return;
+    r.selectionPainted = !!rect || !!lasso;
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
@@ -496,6 +568,25 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       canvas.width / propsRef.current.page.width,
       canvas.height / propsRef.current.page.height,
     );
+    if (lasso && lasso.length > 1) {
+      // Flexcil draws its lasso as a 1px blue dash over a white line.
+      const unit = propsRef.current.page.width / canvas.getBoundingClientRect().width;
+      const loop = new Path2D();
+      loop.moveTo(lasso[0].x, lasso[0].y);
+      for (let i = 1; i < lasso.length; i++) {
+        const a = lasso[i - 1],
+          b = lasso[i];
+        loop.quadraticCurveTo(a.x, a.y, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      }
+      ctx.lineWidth = unit;
+      ctx.lineCap = ctx.lineJoin = "round";
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke(loop);
+      ctx.setLineDash([12 * unit, 12 * unit]);
+      ctx.strokeStyle = "#4793ef";
+      ctx.stroke(loop);
+      ctx.setLineDash([]);
+    }
     if (rect) {
       ctx.strokeStyle = getComputedStyle(canvas).getPropertyValue("--accent").trim();
       ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--accent-wash").trim();
@@ -650,8 +741,25 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
     function erase(x: number, y: number) {
       const r = runtime.current,
         g = r.gesture!;
-      const radius = (10 * propsRef.current.page.width) / canvas.getBoundingClientRect().width;
-      const next = (g.changed || g.original).filter((s) => !hitStroke(s, x, y, radius));
+      // Flexcil's eraser width is in frame units; it sweeps between samples.
+      const radius = (propsRef.current.eraserWidth / 2) * UNIT,
+        from = g.erased ?? { x, y, p: 0, t: 0 };
+      g.erased = { x, y, p: 0, t: 0 };
+      const steps = Math.max(1, Math.ceil(Math.hypot(x - from.x, y - from.y) / radius));
+      const touched = (s: Stroke) => {
+        for (let i = 1; i <= steps; i++)
+          if (
+            hitStroke(
+              s,
+              from.x + ((x - from.x) * i) / steps,
+              from.y + ((y - from.y) * i) / steps,
+              radius,
+            )
+          )
+            return true;
+        return false;
+      };
+      const next = (g.changed || g.original).filter((s) => !touched(s));
       if (next.length !== (g.changed || g.original).length) {
         g.changed = next;
         redrawBase();
@@ -799,22 +907,33 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         clientX: e.clientX,
         clientY: e.clientY,
       };
-      if (mode === "draw")
+      if (mode === "draw") {
+        const pen = p.pen,
+          marker = isHighlighter(pen.brush);
         r.gesture.stroke = {
           id: crypto.randomUUID(),
-          tool: p.tool === "highlighter" ? "highlighter" : "pen",
-          color: p.color,
-          width: p.tool === "highlighter" ? 14 + ((p.width - 0.6) / 0.6) * 2 : p.width,
+          tool: marker ? "highlighter" : "pen",
+          color: pen.color,
+          // Flexcil widths are in its 768-unit page frame.
+          width: Math.max(0.1, pen.width * UNIT),
           points: [start],
-          rendering: "precise",
-          pressureSensitive: p.penPressure,
+          brush: pen.brush,
+          pressureSensitive: p.penPressure && e.pointerType === "pen",
+          ...(pen.opacity < 1 ? { opacity: pen.opacity } : {}),
         };
+        r.gesture.straight = pen.straight;
+        // Flexcil stabilizes pens but never highlighters or straight strokes.
+        if (!marker && !pen.straight && pen.smooth > 0) {
+          r.gesture.stabilize = stabilizer(pen.smooth);
+          r.gesture.stroke.points[0] = r.gesture.stabilize(start);
+        }
+      }
       rasterMode(mode === "draw" || mode === "pan");
       if (mode === "draw") paintInputInk();
       if (mode === "erase") erase(start.x, start.y);
       if (mode === "select") {
         r.selection.clear();
-        r.rect = { x: start.x, y: start.y, width: 0, height: 0 };
+        r.gesture.lasso = [start];
       }
       if (mode === "move" || mode === "resize" || mode === "rotate") {
         r.gesture.changed = r.strokes;
@@ -904,20 +1023,13 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           }
           if (duplicate) continue;
           if (e.type === "pointerrawupdate") (g.rawSamples ??= []).push(next);
-          const points = g.stroke!.points,
-            last = points[points.length - 1];
-          // A delayed sample must not draw backwards through already received input.
-          if (next.t < last.t) continue;
-          if (next.x !== last.x || next.y !== last.y || next.p !== last.p) points.push(next);
+          addSample(g, next);
         } else if (g.mode === "erase") erase(next.x, next.y);
-        else if (g.mode === "select")
-          r.rect = {
-            x: Math.min(next.x, g.start.x),
-            y: Math.min(next.y, g.start.y),
-            width: Math.abs(next.x - g.start.x),
-            height: Math.abs(next.y - g.start.y),
-          };
-        else if (g.mode === "move")
+        else if (g.mode === "select") {
+          const lasso = g.lasso!,
+            last = lasso[lasso.length - 1];
+          if (Math.hypot(next.x - last.x, next.y - last.y) > 0.5) lasso.push(next);
+        } else if (g.mode === "move")
           g.changed = g.original.map((s) =>
             r.selection.has(s.id) ? translate(s, next.x - g.start.x, next.y - g.start.y) : s,
           );
@@ -1003,7 +1115,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           next = point(e);
         // Lift-off reports zero pressure; keep the contact's width at its final coordinate.
         if (!e.pressure) next.p = last.p;
-        if (next.x !== last.x || next.y !== last.y) g.stroke.points.push(next);
+        if (next.x !== last.x || next.y !== last.y) addSample(g, next);
         paintInputInk();
       }
       r.gesture = null;
@@ -1018,12 +1130,16 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         (g.mode === "erase" || g.mode === "move" || g.mode === "resize" || g.mode === "rotate")
       )
         commit(g.changed);
-      else if (g.mode === "select" && r.rect) {
-        for (const s of r.strokes) {
-          const b = bounds([s]);
-          if (b && intersects(b, r.rect)) r.selection.add(s.id);
-        }
-        r.rect = null;
+      else if (g.mode === "select" && g.lasso) {
+        // Flexcil's lasso selects ink that falls inside the drawn loop.
+        const lasso = g.lasso,
+          box = bounds([{ id: "", tool: "pen", color: "", width: 0, points: lasso }]);
+        if (lasso.length > 2 && box)
+          for (const s of r.strokes) {
+            const b = bounds([s]);
+            if (b && intersects(b, box) && s.points.some((q) => insidePolygon(lasso, q.x, q.y)))
+              r.selection.add(s.id);
+          }
         status();
       }
       redrawBase();
@@ -1091,7 +1207,10 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         viewBox={`0 0 ${props.page.width} ${props.page.height}`}
         aria-hidden="true"
       >
-        {!props.transparent && (
+        {!props.transparent && props.page.paper.template === "flexcil" && (
+          <FlexcilPaper page={props.page} />
+        )}
+        {!props.transparent && props.page.paper.template !== "flexcil" && (
           <>
             <rect
               width={props.page.width}

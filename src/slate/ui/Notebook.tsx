@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { prepareInkSave } from "../core/ink-save";
 import {
@@ -16,6 +16,7 @@ import {
   Minus,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelTopOpen,
   ArrowUp,
   ArrowDown,
   RotateCcw,
@@ -23,7 +24,14 @@ import {
   Shrink,
   Expand,
 } from "lucide-react";
-import { newPage, duplicatePage, type Page, type Paper, type SlateDocument } from "../core/model";
+import {
+  newPage,
+  duplicatePage,
+  isHighlighter,
+  type Page,
+  type Paper,
+  type SlateDocument,
+} from "../core/model";
 import { workspace, useWorkspace } from "../core/workspace";
 import { InkSurface, type InkHandle, type InkTool } from "../ink/InkSurface";
 import { Floating, IconButton, Menu, ContextActions } from "./shared";
@@ -48,6 +56,7 @@ export function Notebook({
     [tool, setTool] = useState<InkTool>("pen"),
     [zoomView, setZoomView] = useState({ zoom: 1 });
   const zoom = zoomView.zoom;
+  const slot = preferences.pens[preferences.activePen] ?? preferences.pens[0];
   const thumbnails = preferences.notebookPages;
   const [history, setHistory] = useState({ undo: false, redo: false, selection: false }),
     [pdf, setPdf] = useState<PDFDocumentProxy | null>(null),
@@ -225,6 +234,10 @@ export function Notebook({
         sum + parseInt(paperColor.slice(at, at + 2), 16) * [0.2126, 0.7152, 0.0722][i],
       0,
     ) < 110;
+  const activePen = useMemo(
+    () => ({ ...slot, color: inkColorForPaper(slot.color, darkPaper) }),
+    [slot, darkPaper],
+  );
   const current = useRef({ doc, page });
   current.current = { doc, page };
   useEffect(() => {
@@ -271,6 +284,15 @@ export function Notebook({
         e.preventDefault();
         setTool(entry.id);
       }
+      if (e.key.toLowerCase() === "h") {
+        // Flexcil keeps highlighters in the pen list; H picks the first one.
+        const marker = preferences.pens.findIndex((p) => isHighlighter(p.brush));
+        if (marker >= 0) {
+          e.preventDefault();
+          void workspace.preferences({ activePen: marker });
+          setTool("pen");
+        }
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && history.selection) {
         e.preventDefault();
         ink.current?.removeSelection();
@@ -286,7 +308,7 @@ export function Notebook({
     };
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
-  }, [history.selection, doc.pages.length, active]);
+  }, [history.selection, doc.pages.length, active, preferences.pens]);
   useEffect(() => {
     if (doc.kind !== "pdf" || !doc.assetId) return;
     let canceled = false,
@@ -360,53 +382,74 @@ export function Notebook({
     setIndex(next);
     viewport.current?.scrollTo({ top: 0, left: 0 });
   }
+  const floatingToolbar = preferences.inkToolbarMode === "floating";
+  const toolbar = (
+    <InkToolbar
+      tool={tool}
+      onTool={setTool}
+      history={history}
+      ink={ink}
+      start={
+        <>
+          {!preferences.notebookTitlebar && (
+            <IconButton
+              label="Show title bar"
+              onClick={() => void workspace.preferences({ notebookTitlebar: true })}
+            >
+              <PanelTopOpen size={18} />
+            </IconButton>
+          )}
+          <IconButton
+            label={thumbnails ? "Hide pages" : "Show pages"}
+            aria-pressed={thumbnails}
+            onClick={() => void workspace.preferences({ notebookPages: !thumbnails })}
+          >
+            {thumbnails ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+          </IconButton>
+        </>
+      }
+      end={
+        <>
+          {doc.kind !== "pdf" && page && (
+            <Floating
+              trigger={
+                <IconButton label="Paper template">
+                  <span className={"mini-paper mini-" + page.paper.style} />
+                </IconButton>
+              }
+            >
+              <PaperPicker paper={page.paper} onChange={setPaper} />
+            </Floating>
+          )}
+          <div className="zoom-control">
+            <IconButton
+              label="Zoom out"
+              disabled={zoom <= 0.5}
+              onClick={() => zoomFromCenter(Math.max(0.5, zoom - 0.1))}
+            >
+              <Minus size={14} />
+            </IconButton>
+            <button ref={zoomLabel} title="Fit page width" onClick={() => zoomFromCenter(1)}>
+              {Math.round(zoom * 100)}%
+            </button>
+            <IconButton
+              label="Zoom in"
+              disabled={zoom >= MAX_ZOOM}
+              onClick={() => zoomFromCenter(Math.min(MAX_ZOOM, zoom + 0.1))}
+            >
+              <Plus size={14} />
+            </IconButton>
+          </div>
+          <span className="notebook-page-label">
+            {index + 1} <span>/ {doc.pages.length}</span>
+          </span>
+        </>
+      }
+    />
+  );
   return (
     <div className="notebook-workspace">
-      <div className="notebook-controls">
-        <IconButton
-          label={thumbnails ? "Hide pages" : "Show pages"}
-          aria-pressed={thumbnails}
-          onClick={() => void workspace.preferences({ notebookPages: !thumbnails })}
-        >
-          {thumbnails ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-        </IconButton>
-        <span className="notebook-page-label">
-          Page {index + 1} <span>of {doc.pages.length}</span>
-        </span>
-        <div className="controls-spacer" />
-        {doc.kind !== "pdf" && page && (
-          <Floating
-            trigger={
-              <button className="quiet-button">
-                <span className={"mini-paper mini-" + page.paper.style} />
-                <span>Paper</span>
-                <ChevronDown size={14} />
-              </button>
-            }
-          >
-            <PaperPicker paper={page.paper} onChange={setPaper} />
-          </Floating>
-        )}
-        <div className="zoom-control">
-          <IconButton
-            label="Zoom out"
-            disabled={zoom <= 0.5}
-            onClick={() => zoomFromCenter(Math.max(0.5, zoom - 0.1))}
-          >
-            <Minus size={14} />
-          </IconButton>
-          <button ref={zoomLabel} title="Fit page width" onClick={() => zoomFromCenter(1)}>
-            {Math.round(zoom * 100)}%
-          </button>
-          <IconButton
-            label="Zoom in"
-            disabled={zoom >= MAX_ZOOM}
-            onClick={() => zoomFromCenter(Math.min(MAX_ZOOM, zoom + 0.1))}
-          >
-            <Plus size={14} />
-          </IconButton>
-        </div>
-      </div>
+      {!floatingToolbar && toolbar}
       {doc.flexcil && (
         <div className="flexcil-status" role="status">
           <span>
@@ -512,6 +555,7 @@ export function Notebook({
           </aside>
         )}
         <div className="notebook-paper-area">
+          {floatingToolbar && toolbar}
           <div ref={viewport} className="page-viewport">
             {pdfError ? (
               <div className="document-error">
@@ -591,8 +635,8 @@ export function Notebook({
                       ref={ink}
                       page={page}
                       tool={tool}
-                      color={inkColorForPaper(preferences.inkColor, darkPaper)}
-                      width={preferences.inkWidth}
+                      pen={activePen}
+                      eraserWidth={preferences.eraserWidth}
                       touchInk={preferences.touchInk}
                       penPressure={preferences.penPressure}
                       transparent={doc.kind === "pdf"}
@@ -674,13 +718,6 @@ export function Notebook({
               )}
             </div>
           </div>
-          <InkToolbar
-            tool={tool}
-            onTool={setTool}
-            darkPaper={darkPaper}
-            history={history}
-            ink={ink}
-          />
         </div>
       </div>
     </div>

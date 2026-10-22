@@ -1,5 +1,7 @@
 import { getStroke } from "perfect-freehand";
 import type { Page, Stroke } from "../core/model";
+import { drawBrush } from "./flexcil";
+import { drawFlexcilPaper } from "./paper";
 const paths = new WeakMap<
   Stroke,
   { count: number; width: number; chunks: string[]; d?: string; pressure?: number }
@@ -160,6 +162,7 @@ export function strokePath(stroke: Stroke) {
   return (cached.d ??= chunks.join(""));
 }
 export function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
+  if (stroke.brush) return drawBrush(ctx, stroke);
   let cached = canvasPaths.get(stroke);
   if (!cached || cached.count !== stroke.points.length || cached.width !== stroke.width) {
     if (!stroke.points.length) return;
@@ -182,6 +185,7 @@ export function releaseStrokeGeometry(stroke: Stroke) {
   paths.delete(stroke);
 }
 export function drawPaper(ctx: CanvasRenderingContext2D, page: Page) {
+  if (page.paper.template === "flexcil") return drawFlexcilPaper(ctx, page);
   const { width, height, paper } = page;
   ctx.fillStyle = paper.color;
   ctx.fillRect(0, 0, width, height);

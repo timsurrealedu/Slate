@@ -31,61 +31,70 @@ export function PaperThumbnail({ page }: { page: Page }) {
   }, [page]);
   return <canvas ref={ref} className="paper-thumbnail" />;
 }
+function TemplatePreview({ paper }: { paper: Paper }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current!,
+      ratio = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = 54 * ratio;
+    canvas.height = 72 * ratio;
+    const ctx = canvas.getContext("2d")!;
+    ctx.setTransform((54 * ratio) / 794, 0, 0, (54 * ratio) / 794, 0, 0);
+    drawPaper(ctx, { id: "", paper, width: 794, height: 1059, strokes: [] });
+  }, [paper]);
+  return <canvas ref={ref} className="template-canvas" aria-hidden="true" />;
+}
 export function PaperPicker({ paper, onChange }: { paper: Paper; onChange(paper: Paper): void }) {
+  const flexcil = paper.template === "flexcil";
+  const color = PAPER_COLORS.find((c) => c.color === paper.color) ?? PAPER_COLORS[0];
   return (
     <div className="paper-picker">
-      <h3>Paper</h3>
+      <h3>Template</h3>
       <div className="paper-styles">
-        {PAPER_STYLES.map((style) => (
-          <button
-            key={style.id}
-            className={paper.style === style.id ? "selected" : ""}
-            aria-pressed={paper.style === style.id}
-            onClick={() => onChange({ ...paper, style: style.id })}
-          >
-            <span
-              className={"template-preview template-" + style.id}
-              style={
-                {
-                  backgroundColor: paper.color,
-                  "--paper-line": paper.lineColor,
-                } as React.CSSProperties
-              }
-            />
-            {style.name}
-          </button>
-        ))}
+        {PAPER_STYLES.map((style) => {
+          const selected =
+            flexcil && paper.style === style.id && !!paper.columns === !!style.columns;
+          const next: Paper = {
+            ...paper,
+            style: style.id,
+            columns: style.columns || undefined,
+            color: color.color,
+            lineColor: color.line,
+            template: "flexcil",
+          };
+          return (
+            <button
+              key={style.name}
+              className={selected ? "selected" : ""}
+              aria-pressed={selected}
+              onClick={() => onChange(next)}
+            >
+              <TemplatePreview paper={next} />
+              {style.name}
+            </button>
+          );
+        })}
       </div>
       <div className="paper-colors">
-        {PAPER_COLORS.map((color) => (
+        {PAPER_COLORS.map((c) => (
           <button
-            key={color.name}
-            className={paper.color === color.color ? "selected" : ""}
-            aria-pressed={paper.color === color.color}
-            aria-label={color.name + " paper"}
-            title={color.name}
-            style={{ background: color.color }}
-            onClick={() => onChange({ ...paper, color: color.color, lineColor: color.line })}
+            key={c.name}
+            className={paper.color === c.color ? "selected" : ""}
+            aria-pressed={paper.color === c.color}
+            aria-label={c.name + " paper"}
+            title={c.name}
+            style={{ background: c.color }}
+            onClick={() =>
+              onChange({ ...paper, color: c.color, lineColor: c.line, template: "flexcil" })
+            }
           >
-            {paper.color === color.color && (
-              <Check size={16} style={{ color: color.name === "Dark" ? "#fff" : "#385775" }} />
+            {paper.color === c.color && (
+              <Check size={16} style={{ color: c.name === "Dark" ? "#fff" : "#4793ef" }} />
             )}
           </button>
         ))}
       </div>
-      <label className="field-row">
-        Line spacing
-        <select
-          value={paper.spacing}
-          onChange={(e) => onChange({ ...paper, spacing: Number(e.target.value) })}
-        >
-          <option value={18}>Small</option>
-          <option value={24}>Medium</option>
-          <option value={30}>Large</option>
-          <option value={36}>Extra large</option>
-        </select>
-      </label>
-      <p>Your next notebook will use this paper.</p>
+      <p>Your next notebook will use this template.</p>
     </div>
   );
 }

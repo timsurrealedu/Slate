@@ -171,16 +171,19 @@
   overscroll-behavior: contain;
   touch-action: none;
   overflow-anchor: none;
-  background: #e9ecf0;
+  /* Flexcil's colorPdfBackground. */
+  background: #f3f3f3;
 }
 :root[data-theme="dark"] .page-viewport {
-  background: #171d27;
+  background: #000000;
 }
 .paper-page {
   position: relative;
   margin: 0 auto;
   flex-shrink: 0;
-  box-shadow: 0 6px 22px #21334c17;
+  box-shadow:
+    0 0 0 1px #0000000d,
+    0 2px 8px #0000001a;
   overflow: hidden;
 }
 .paper-page:focus-within {
@@ -366,23 +369,22 @@
   color: var(--accent);
 }
 .paper-picker {
-  width: 266px;
+  width: 300px;
 }
 .paper-styles {
-  display: flex;
-  justify-content: space-between;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
 }
 .paper-styles > button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: 2px;
   border-radius: 5px;
-  padding: 5px 5px 8px;
+  padding: 5px 3px 6px;
   font-size: 10px;
   color: var(--muted);
-  flex: 1;
   border: 1px solid transparent;
 }
 .paper-styles > button.selected {
@@ -590,4 +592,277 @@
     padding-top: 12px;
     padding-bottom: 80px;
   }
+}
+
+/* Flexcil writing toolbar: tools, then a row of pens that rise when selected. */
+.fx-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  height: 52px;
+  padding: 0 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  user-select: none;
+}
+.fx-toolbar-side,
+.fx-toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.fx-toolbar-side {
+  flex: 1;
+}
+.fx-toolbar-side.end {
+  justify-content: flex-end;
+  gap: 6px;
+}
+.fx-toolbar-center {
+  flex: 0 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.fx-toolbar .icon-button {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.fx-toolbar .icon-button.active {
+  color: #4793ef;
+  background: color-mix(in srgb, #4793ef 12%, transparent);
+}
+.fx-toolbar .toolbar-divider {
+  align-self: center;
+  height: 24px;
+  margin: 0 6px;
+}
+.fx-pens {
+  display: flex;
+  align-items: flex-end;
+  align-self: stretch;
+  gap: 4px;
+  overflow: hidden;
+}
+.fx-pen {
+  position: relative;
+  width: 34px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.fx-pen .pen-glyph {
+  position: absolute;
+  left: 2px;
+  bottom: -28px;
+  width: 30px;
+  height: 60px;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  filter: drop-shadow(0 1px 1px #00000026);
+}
+.fx-pen.selected .pen-glyph {
+  transform: translateY(-10px);
+}
+.fx-pen-width {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  font-size: 8px;
+  line-height: 1;
+  color: #6b6b6b;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.fx-pen.selected .fx-pen-width {
+  color: #4793ef;
+  font-weight: 600;
+}
+.fx-pen:focus-visible {
+  outline: 2px solid #4793ef;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.fx-toolbar .mini-paper {
+  height: 18px;
+  width: 14px;
+}
+.pen-editor {
+  width: 288px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.eraser-editor {
+  width: 220px;
+}
+.pen-types {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  height: 52px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+.pen-types > button {
+  position: relative;
+  width: 40px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+.pen-types .pen-glyph {
+  position: absolute;
+  left: 9px;
+  bottom: -14px;
+  width: 22px;
+  height: 44px;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pen-types > button.selected .pen-glyph {
+  transform: translateY(-8px);
+}
+.pen-preview {
+  width: 100%;
+  height: 72px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+}
+.pen-setting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+.pen-setting > span {
+  flex: 1;
+  font-weight: 500;
+}
+.pen-setting output {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pen-setting .icon-button {
+  width: 28px;
+  height: 28px;
+}
+.pen-editor input[type="range"] {
+  width: 100%;
+  accent-color: #4793ef;
+}
+.pen-switch input {
+  accent-color: #4793ef;
+  width: 18px;
+  height: 18px;
+}
+.pen-colors {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.pen-colors > button,
+.pen-custom-color {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #0000001f;
+  padding: 0;
+  cursor: pointer;
+  justify-self: center;
+}
+.pen-colors > button.selected {
+  outline: 2px solid #4793ef;
+  outline-offset: 2px;
+}
+.pen-custom-color {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(#e02020, #f7b500, #6dd400, #32c5ff, #6236ff, #b620e0, #e02020);
+}
+.pen-custom-color input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pen-actions {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+.pen-actions .quiet-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pen-actions .danger {
+  color: var(--danger, #a4494e);
+}
+.template-canvas {
+  width: 54px;
+  height: 72px;
+  display: block;
+  margin: 0 auto 4px;
+  border: 1px solid #0000001f;
+}
+@media (max-width: 1100px) {
+  /* Tablets zoom by pinching; the pens need the room. */
+  .fx-toolbar .zoom-control,
+  .fx-toolbar .notebook-page-label {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .fx-toolbar {
+    gap: 2px;
+    padding: 0 4px;
+  }
+}
+/* Flexcil's floating writing toolbar: a draggable card over the paper. */
+.fx-toolbar.floating {
+  position: absolute;
+  z-index: 15;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  height: 50px;
+  padding: 0 6px 0 2px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px #0000001f;
+  overflow: hidden;
+}
+.fx-toolbar.floating .fx-toolbar-side {
+  flex: none;
+}
+.fx-toolbar.floating[data-dragging] {
+  cursor: grabbing;
+  box-shadow: 0 10px 32px #0000002e;
+}
+.fx-toolbar .fx-grip {
+  width: 22px;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+}
+.fx-toolbar .fx-pens {
+  overflow: visible;
+  flex-shrink: 0;
+}
+.fx-toolbar .notebook-page-label {
+  white-space: nowrap;
 }

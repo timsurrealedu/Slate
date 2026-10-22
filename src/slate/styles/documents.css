@@ -846,7 +846,7 @@
     padding: 0 8px;
   }
   .document-titlebar .document-title-icon,
-  .document-title-actions > .icon-button:not([aria-haspopup="menu"]) {
+  .document-title-actions > .icon-button:not([aria-haspopup="menu"]):not(.titlebar-collapse) {
     display: none;
   }
   .document-titlebar .icon-button {

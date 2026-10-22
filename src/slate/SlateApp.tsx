@@ -41,6 +41,7 @@ import {
   History,
   PanelRightOpen,
   PanelRightClose,
+  PanelTopClose,
   Check,
   HardDrive,
   Settings as SettingsIcon,
@@ -543,7 +544,14 @@ export default function SlateApp() {
                 </div>
                 <div className="document-shell" hidden={!doc}>
                   {doc && (
-                    <div className="document-titlebar">
+                    <div
+                      className="document-titlebar"
+                      // Notebooks can fold the title bar away for more paper.
+                      hidden={
+                        (doc.kind === "notebook" || doc.kind === "pdf") &&
+                        !app.preferences.notebookTitlebar
+                      }
+                    >
                       {!app.compact && !app.sidebar && (
                         <IconButton label="Show library" onClick={() => app.setSidebar(true)}>
                           <PanelLeftOpen size={19} />
@@ -568,6 +576,15 @@ export default function SlateApp() {
                         />
                       )}
                       <div className="document-title-actions">
+                        {(doc.kind === "notebook" || doc.kind === "pdf") && (
+                          <IconButton
+                            label="Hide title bar"
+                            className="titlebar-collapse"
+                            onClick={() => void workspace.preferences({ notebookTitlebar: false })}
+                          >
+                            <PanelTopClose size={18} />
+                          </IconButton>
+                        )}
                         <IconButton
                           label={doc.starred ? "Remove from Starred" : "Add to Starred"}
                           aria-pressed={doc.starred}

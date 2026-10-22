@@ -10,7 +10,7 @@ Keep the latest complete release, one compressed rollback and compact source bac
 
 - Markdown source, live preview and reading, with wiki links, backlinks, tags, Vim, tables and equations.
 - Connected folder vaults, nested folders, search, tabs and recoverable Trash.
-- Paged notebooks with precise ink and rounded joins, optional pen pressure, 1000% zoom, selection transforms, PDF annotation and touch gestures.
+- Paged notebooks with Flexcil-style pens (ballpoint, fountain, slanted fountain, pencil, round and square highlighters), per-pen stabilization, Flexcil templates, lasso selection, optional pen pressure, 1000% zoom, PDF annotation and touch gestures. See [Flexcil ink parity](docs/flexcil-ink-2026-10-19.md).
 - Saved layout and appearance preferences, local revision history and portable backups.
 - Source-preserving Flexcil import with PDF recovery. Existing Flexcil handwriting and synchronized audio have no verified decoder; see [import findings](docs/flexcil-import.md).
 

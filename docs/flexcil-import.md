@@ -28,3 +28,9 @@ Cancellation stops before the next atomic document commit; documents already imp
 The current portable backup importer retains its existing 256 MB compressed / 512 MB expanded limits. Large Flexcil sources can exceed a device's available storage or backup limits; original `.flx` files remain individually exportable.
 
 Next decoder work needs controlled Flexcil fixtures containing one known feature each, including recordings, pressure, highlighting, transforms, inserted pages, and image/text objects. Never invent stroke coordinates or audio timing from opaque payloads.
+
+## Static format findings (2026-10-19)
+
+Decompiling Flexcil 1.5.0.13 (`AnnotationManagerBase`, `JDrawingTypeAdapterForSerialize`, `jf.c`) shows the handwriting record. Each page stores `<pageKey>.drawings` (with a `_back` copy), a JSON array of drawings with `figure`, `points`, `start`, `mode` (pen type), `dashtype`, `fillColor`/`strokeColor` (ARGB), `key`, `type`, `scale`, `rotate` and optional `seed`/`phase`. `points` is base64 of a little-endian `u32` count followed by `f32 x, f32 y, f32 width` per point, relative to `start`; readers apply `point × scale + start`. No pressure or timing is stored.
+
+This is derived from code, not checked against a real `.flx`, so it is still not a verified decoder. The import limitations above still apply. See `flexcil-ink-2026-10-19.md` for the pen mechanics.

@@ -7,6 +7,7 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import {
   SCHEMA_VERSION,
   DEFAULT_PREFERENCES,
+  DEFAULT_PENS,
   type SlateDocument,
   type Folder,
   type Preferences,
@@ -122,10 +123,12 @@ export async function getRevisions(id: string) {
   return items.sort((a, b) => b.document.revision - a.document.revision);
 }
 const paper = z.object({
-  style: z.enum(["blank", "lined", "grid", "dot"]),
+  style: z.enum(["blank", "lined", "grid", "dot", "cornell", "legal", "vertical"]),
   color: z.string().regex(/^#[0-9a-f]{6}$/i),
   lineColor: z.string().regex(/^#[0-9a-f]{6}$/i),
   spacing: z.number().min(8).max(100),
+  template: z.literal("flexcil").optional(),
+  columns: z.boolean().optional(),
 });
 const point = z.object({
   x: z.number().finite(),
@@ -141,6 +144,10 @@ const stroke = z.object({
   points: z.array(point).max(100000),
   rendering: z.enum(["direct", "smooth", "precise"]).optional(),
   pressureSensitive: z.boolean().optional(),
+  brush: z
+    .enum(["ballpoint", "fountain", "calligraphy", "pencil", "highlighter", "marker"])
+    .optional(),
+  opacity: z.number().min(0.05).max(1).optional(),
 });
 export const docSchema = z.object({
   id: z.string().max(200),
@@ -213,6 +220,31 @@ const manifestSchema = z.object({
       .regex(/^#[0-9a-f]{6}$/i)
       .default("#385775"),
     inkWidth: z.number().min(0.6).max(2.4).default(1.2),
+    inkToolbarMode: z.enum(["docked", "floating"]).default("docked"),
+    notebookTitlebar: z.boolean().default(true),
+    pens: z
+      .array(
+        z.object({
+          brush: z.enum([
+            "ballpoint",
+            "fountain",
+            "calligraphy",
+            "pencil",
+            "highlighter",
+            "marker",
+          ]),
+          color: z.string().regex(/^#[0-9a-f]{6}$/i),
+          width: z.number().min(0.1).max(40),
+          opacity: z.number().min(0.05).max(1),
+          straight: z.boolean(),
+          smooth: z.number().min(0).max(1).default(0.2),
+        }),
+      )
+      .min(1)
+      .max(40)
+      .default(DEFAULT_PENS),
+    activePen: z.number().int().min(0).max(39).default(0),
+    eraserWidth: z.number().min(1).max(40).default(10),
     notebookPages: z.boolean().default(true),
     inkToolbarPosition: z
       .object({

@@ -1,18 +1,32 @@
 export const SCHEMA_VERSION = 1;
 export type DocumentKind = "note" | "notebook" | "pdf" | "docx";
-export type PaperStyle = "blank" | "lined" | "grid" | "dot";
+export type PaperStyle = "blank" | "lined" | "grid" | "dot" | "cornell" | "legal" | "vertical";
 export type Theme = "light" | "dark" | "system";
 export interface Paper {
   style: PaperStyle;
   color: string;
   lineColor: string;
   spacing: number;
+  // Flexcil templates use its fixed template geometry instead of `spacing`.
+  template?: "flexcil";
+  columns?: boolean;
 }
 export interface Point {
   x: number;
   y: number;
   p: number;
   t: number;
+}
+// Flexcil pen engines; absent on strokes written by Slate's earlier renderers.
+export type Brush = "ballpoint" | "fountain" | "calligraphy" | "pencil" | "highlighter" | "marker";
+export interface PenSlot {
+  brush: Brush;
+  color: string;
+  width: number;
+  opacity: number;
+  straight: boolean;
+  // Flexcil's per-pen stroke stabilization, 0-1.
+  smooth: number;
 }
 export interface Stroke {
   id: string;
@@ -22,6 +36,8 @@ export interface Stroke {
   points: Point[];
   rendering?: "direct" | "smooth" | "precise";
   pressureSensitive?: boolean;
+  brush?: Brush;
+  opacity?: number;
 }
 export interface Page {
   id: string;
@@ -70,6 +86,12 @@ export interface Preferences {
   inkColor: string;
   inkWidth: number;
   inkToolbarPosition: { x: number; y: number } | null;
+  // Flexcil docks its writing toolbar above the page or floats it over the paper.
+  inkToolbarMode: "docked" | "floating";
+  notebookTitlebar: boolean;
+  pens: PenSlot[];
+  activePen: number;
+  eraserWidth: number;
   notebookPages: boolean;
   editorSize: number;
   workspaceName: string;
@@ -88,6 +110,20 @@ export const DEFAULT_PAPER: Paper = {
   lineColor: "#dce3e8",
   spacing: 24,
 };
+// Flexcil's DefaultPens.json, in Flexcil width units (pens 0.1-20, highlighters 1-40).
+export const DEFAULT_PENS: PenSlot[] = [
+  { brush: "ballpoint", color: "#000000", width: 1, opacity: 1, straight: false, smooth: 0.2 },
+  { brush: "ballpoint", color: "#e02020", width: 1, opacity: 1, straight: false, smooth: 0.2 },
+  { brush: "ballpoint", color: "#171717", width: 3, opacity: 1, straight: false, smooth: 0.2 },
+  { brush: "highlighter", color: "#ffed2a", width: 10, opacity: 0.47, straight: false, smooth: 0 },
+  { brush: "marker", color: "#00da58", width: 10, opacity: 0.48, straight: false, smooth: 0 },
+  { brush: "highlighter", color: "#e02020", width: 15, opacity: 0.76, straight: true, smooth: 0 },
+  { brush: "marker", color: "#32c5ff", width: 15, opacity: 0.5, straight: true, smooth: 0 },
+  { brush: "calligraphy", color: "#333333", width: 1.5, opacity: 1, straight: false, smooth: 0.2 },
+  { brush: "fountain", color: "#0069db", width: 1.5, opacity: 1, straight: false, smooth: 0.2 },
+  { brush: "pencil", color: "#3a3a3a", width: 2, opacity: 1, straight: false, smooth: 0.2 },
+];
+export const isHighlighter = (brush: Brush) => brush === "highlighter" || brush === "marker";
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: "light",
   paper: DEFAULT_PAPER,
@@ -96,6 +132,11 @@ export const DEFAULT_PREFERENCES: Preferences = {
   inkColor: "#385775",
   inkWidth: 1.2,
   inkToolbarPosition: null,
+  inkToolbarMode: "docked",
+  notebookTitlebar: true,
+  pens: DEFAULT_PENS,
+  activePen: 0,
+  eraserWidth: 10,
   notebookPages: true,
   editorSize: 18,
   workspaceName: "My workspace",
@@ -109,21 +150,29 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorAlignment: "center",
 };
 export const PAPER_COLORS = [
-  { name: "White", color: "#ffffff", line: "#dfe4eb" },
-  { name: "Warm", color: "#fffef6", line: "#e3dfd1" },
-  { name: "Mist", color: "#eef4f8", line: "#cddce7" },
-  { name: "Sage", color: "#edf3ed", line: "#ccdbcd" },
-  { name: "Dark", color: "#253041", line: "#3b4b60" },
+  { name: "White", color: "#ffffff", line: "#d3d3d4" },
+  { name: "Yellow", color: "#fef4c3", line: "#b4a36e" },
+  { name: "Dark", color: "#2d2d2f", line: "#5d5955" },
 ];
-export const PAPER_STYLES: { id: PaperStyle; name: string }[] = [
-  { id: "blank", name: "Blank" },
+// Flexcil's Standard template set.
+export const PAPER_STYLES: { id: PaperStyle; name: string; columns?: boolean }[] = [
+  { id: "blank", name: "Plain" },
   { id: "lined", name: "Lined" },
-  { id: "grid", name: "Grid" },
+  { id: "grid", name: "Graph" },
   { id: "dot", name: "Dotted" },
+  { id: "cornell", name: "Cornell" },
+  { id: "legal", name: "Legal" },
+  { id: "vertical", name: "Vertical" },
+  { id: "blank", name: "2 Column", columns: true },
+  { id: "lined", name: "2 Column Lined", columns: true },
+  { id: "grid", name: "2 Column Graph", columns: true },
+  { id: "dot", name: "2 Column Dotted", columns: true },
 ];
+// Flexcil's standard portrait page is 768 × 1024.
+export const pageHeight = (paper: Paper) => (paper.template === "flexcil" ? 1059 : 1123);
 export const newId = () => crypto.randomUUID();
 export function newPage(paper: Paper = DEFAULT_PAPER): Page {
-  return { id: newId(), paper: { ...paper }, width: 794, height: 1123, strokes: [] };
+  return { id: newId(), paper: { ...paper }, width: 794, height: pageHeight(paper), strokes: [] };
 }
 export function makeDocument(
   kind: DocumentKind,
