@@ -78,7 +78,13 @@ export interface Folder {
   parentId?: string | null;
   trashedAt?: number | null;
 }
+export interface PhotoImportPreferences {
+  sensitivity: number;
+  colors: boolean;
+  paper?: "auto" | PaperStyle;
+}
 export interface Preferences {
+  photoImport?: PhotoImportPreferences;
   theme: Theme;
   paper: Paper;
   touchInk: boolean;

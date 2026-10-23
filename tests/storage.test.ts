@@ -69,6 +69,7 @@ describe("local data integrity", () => {
       inkColor: "#aa6467",
       inkWidth: 0.6,
       penPressure: false,
+      photoImport: { sensitivity: 0.7, colors: false, paper: "auto" as const },
       inkToolbarPosition: { x: 0.2, y: 0.3 },
     };
     const parsed = await parseBackup(await exportWorkspace([doc], [], preferences));

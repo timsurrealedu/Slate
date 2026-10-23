@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Page } from "../core/model";
-import { DEFAULT_HANDWRITING, type HandwritingOptions, type Raster } from "../import/handwriting";
+import {
+  DEFAULT_HANDWRITING,
+  type HandwritingOptions,
+  type HandwritingPage,
+  type Raster,
+} from "../import/handwriting";
 import { decodePhoto, traceHandwriting } from "../import/photo";
 import { drawPaper, drawStroke } from "../ink/render";
 import { IconButton, Modal } from "./shared";
@@ -34,28 +39,42 @@ export function PhotoImport({
   files,
   onClose,
   onCreate,
+  preferences,
+  onPreferences,
 }: {
   files: File[] | null;
   onClose(): void;
   onCreate(title: string, pages: Page[]): Promise<void>;
+  preferences?: HandwritingOptions;
+  onPreferences(options: HandwritingOptions): void;
 }) {
-  const [options, setOptions] = useState<HandwritingOptions>(DEFAULT_HANDWRITING);
+  const [options, setOptions] = useState<HandwritingOptions>(preferences || DEFAULT_HANDWRITING);
   const [index, setIndex] = useState(0);
-  const [pages, setPages] = useState<(Page | undefined)[]>([]);
+  const [results, setResults] = useState<(HandwritingPage | undefined)[]>([]);
   const [tracing, setTracing] = useState(false);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [urls, setUrls] = useState<string[]>([]);
-  const photos = useRef<Promise<Raster>[]>([]);
+  const photos = useRef<
+    Promise<{ raster: Raster; error?: never } | { error: Error; raster?: never }>[]
+  >([]);
+  useEffect(() => {
+    if (!files && preferences) setOptions(preferences);
+  }, [files, preferences]);
   useEffect(() => {
     const list = files || [];
-    photos.current = list.map(decodePhoto);
+    // Attach failures immediately, including later files in a mixed batch.
+    photos.current = list.map((file) =>
+      decodePhoto(file).then(
+        (raster) => ({ raster }),
+        (error) => ({ error }),
+      ),
+    );
     const next = list.map((file) => URL.createObjectURL(file));
     setUrls(next);
     setIndex(0);
-    setPages([]);
+    setResults([]);
     setError("");
-    setOptions(DEFAULT_HANDWRITING);
     return () => next.forEach((url) => URL.revokeObjectURL(url));
   }, [files]);
   useEffect(() => {
@@ -68,9 +87,12 @@ export function PhotoImport({
       setTracing(true);
       try {
         for (let i = 0; i < photos.current.length; i++) {
-          const { page } = await traceHandwriting(await photos.current[i], options);
+          const photo = await photos.current[i];
           if (!live) return;
-          setPages((previous) => Object.assign([...previous], { [i]: page }));
+          if (photo.error) throw photo.error;
+          const result = await traceHandwriting(photo.raster!, options);
+          if (!live) return;
+          setResults((previous) => Object.assign([...previous], { [i]: result }));
         }
         setError("");
       } catch (e) {
@@ -85,14 +107,30 @@ export function PhotoImport({
     };
   }, [files, options]);
   const count = files?.length || 0,
-    page = pages[index],
-    ready = count > 0 && pages.filter(Boolean).length === count && !tracing;
-  const strokes = pages.reduce((sum, p) => sum + (p?.strokes.length || 0), 0);
+    page = results[index]?.page,
+    ready = count > 0 && results.filter(Boolean).length === count && !tracing && !error;
+  const strokes = results.reduce((sum, r) => sum + (r?.page.strokes.length || 0), 0);
+  const papers = {
+    lined: "Lined",
+    grid: "Squared",
+    dot: "Dotted",
+    blank: "Blank",
+    cornell: "Cornell",
+    legal: "Legal",
+    vertical: "Vertical",
+  } as const;
+  function changeOptions(next: HandwritingOptions) {
+    setOptions(next);
+    onPreferences(next);
+  }
   async function create() {
     if (!files || !ready) return;
     setCreating(true);
     try {
-      await onCreate(files[0].name.replace(/\.[^.]+$/, "") || "Handwritten notes", pages as Page[]);
+      await onCreate(
+        files[0].name.replace(/\.[^.]+$/, "") || "Handwritten notes",
+        results.map((r) => r!.page),
+      );
     } finally {
       setCreating(false);
     }
@@ -102,7 +140,7 @@ export function PhotoImport({
       open={!!files}
       onOpenChange={(open) => !open && !creating && onClose()}
       title="Notebook from photos"
-      description="Handwriting is traced into editable ink, one page per photo. Photos stay on this device and are not kept."
+      description="Paper ruling is replaced with a notebook template. Writing and drawings become editable ink, fitted to the page. Photos stay on this device and are not kept."
       className="photo-import"
     >
       <div className="photo-import-preview">
@@ -119,12 +157,32 @@ export function PhotoImport({
           <figcaption>
             {page
               ? page.strokes.length
-                ? page.strokes.length + " strokes"
+                ? papers[results[index]!.detection.style] +
+                  " paper detected · " +
+                  page.strokes.length +
+                  " strokes"
                 : "No handwriting found. Raise the ink sensitivity."
               : "Ink"}
           </figcaption>
         </figure>
       </div>
+      <label className="settings-field">
+        <span>Notebook paper</span>
+        <select
+          value={options.paper || "auto"}
+          disabled={creating}
+          onChange={(e) =>
+            changeOptions({ ...options, paper: e.target.value as HandwritingOptions["paper"] })
+          }
+        >
+          <option value="auto">Match photo automatically</option>
+          {Object.entries(papers).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
       {count > 1 && (
         <div className="photo-import-pager">
           <IconButton
@@ -154,7 +212,10 @@ export function PhotoImport({
             min={0}
             max={100}
             value={Math.round(options.sensitivity * 100)}
-            onChange={(e) => setOptions({ ...options, sensitivity: Number(e.target.value) / 100 })}
+            disabled={creating}
+            onChange={(e) =>
+              changeOptions({ ...options, sensitivity: Number(e.target.value) / 100 })
+            }
           />
           <output>{Math.round(options.sensitivity * 100)}</output>
         </span>
@@ -165,7 +226,8 @@ export function PhotoImport({
           type="checkbox"
           role="switch"
           checked={options.colors}
-          onChange={(e) => setOptions({ ...options, colors: e.target.checked })}
+          disabled={creating}
+          onChange={(e) => changeOptions({ ...options, colors: e.target.checked })}
         />
       </label>
       {error && page && <p className="photo-import-error">{error}</p>}
@@ -178,7 +240,7 @@ export function PhotoImport({
           onClick={() => void create()}
           disabled={!ready || creating}
         >
-          {creating ? "Creating…" : ready ? "Create notebook" : "Reading…"}
+          {creating ? "Creating…" : tracing ? "Reading…" : "Create notebook"}
         </button>
       </div>
       <p className="sr-only" aria-live="polite">

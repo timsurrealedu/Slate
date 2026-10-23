@@ -211,6 +211,15 @@ const manifestSchema = z.object({
     )
     .max(100000),
   preferences: z.object({
+    photoImport: z
+      .object({
+        sensitivity: z.number().min(0).max(1),
+        colors: z.boolean(),
+        paper: z
+          .enum(["auto", "blank", "lined", "grid", "dot", "cornell", "legal", "vertical"])
+          .optional(),
+      })
+      .optional(),
     theme: z.enum(["light", "dark", "system"]),
     paper,
     touchInk: z.boolean(),

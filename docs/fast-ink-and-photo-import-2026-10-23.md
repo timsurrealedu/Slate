@@ -54,4 +54,4 @@ Verified:
   - the sensitivity range.
 - `tests/browser/photo-import.spec.ts` drives the menu, picker, dialog and created notebook.
 
-Limits: perspective is not corrected, so photograph the page straight on. Highlighter shading is not traced as highlighter, and pages are blank paper.
+0.1.22 limits: perspective was not corrected and pages used blank paper. Paper recognition, ruling removal and native template registration are added in [0.1.23](paper-aware-photo-import-2026-10-23.md). Highlighter shading is still not reconstructed as highlighter ink.

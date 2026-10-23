@@ -794,6 +794,8 @@ export default function SlateApp() {
       />
       <PhotoImport
         files={app.photos}
+        preferences={app.preferences.photoImport}
+        onPreferences={(options) => void workspace.preferences({ photoImport: options })}
         onClose={() => app.setPhotos(null)}
         onCreate={app.createFromPhotos}
       />

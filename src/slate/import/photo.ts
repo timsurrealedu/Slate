@@ -25,6 +25,8 @@ export async function decodePhoto(file: File): Promise<Raster> {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
   return { data: ctx.getImageData(0, 0, width, height).data, width, height };

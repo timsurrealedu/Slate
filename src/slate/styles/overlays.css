@@ -804,6 +804,21 @@
 .photo-import.modal-content {
   width: min(760px, calc(100vw - 32px));
 }
+.photo-import select {
+  max-width: 64%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+@media (pointer: coarse) {
+  .photo-import select {
+    min-height: 44px;
+  }
+}
 .photo-import-preview {
   display: grid;
   grid-template-columns: 1fr 1fr;

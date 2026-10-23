@@ -503,6 +503,7 @@ export function InkToolbar({
                     type="button"
                     role="radio"
                     aria-checked={selected}
+                    aria-expanded={undefined /* Radios expose selection through aria-checked. */}
                     aria-haspopup="dialog"
                     aria-label={`${BRUSHES.find((b) => b.id === slot.brush)!.name}, ${formatWidth(slot.width)}`}
                     title={selected ? "Tap again to edit this pen" : undefined}
