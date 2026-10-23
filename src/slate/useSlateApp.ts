@@ -44,6 +44,10 @@ export function useSlateApp() {
       parentId?: string | null;
     } | null>(null),
     [renameDoc, setRenameDoc] = useState<SlateDocument | null>(null),
+    [createDialog, setCreateDialog] = useState<{
+      kind: DocumentKind;
+      folderId: string | null;
+    } | null>(null),
     [moveDoc, setMoveDoc] = useState<SlateDocument | null>(null),
     [historyDoc, setHistoryDoc] = useState<SlateDocument | null>(null),
     [busy, setBusy] = useState(""),
@@ -274,16 +278,11 @@ export function useSlateApp() {
       history.replaceState(null, "", nextId ? "#doc=" + nextId : location.pathname);
     }
   }
-  async function create(
+  function create(
     kind: DocumentKind = "note",
     folderId: string | null = view.startsWith("folder:") ? view.slice(7) : null,
   ) {
-    try {
-      const doc = await workspace.create(kind, folderId);
-      open(doc);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Could not create this document.", undefined, true);
-    }
+    setCreateDialog({ kind, folderId });
   }
   async function openLink(name: string) {
     try {
@@ -550,6 +549,8 @@ export function useSlateApp() {
     setFolderDialog,
     renameDoc,
     setRenameDoc,
+    createDialog,
+    setCreateDialog,
     moveDoc,
     setMoveDoc,
     historyDoc,

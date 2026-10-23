@@ -14,7 +14,13 @@ import { ContextPanel } from "./ui/ContextPanel";
 import { CommandPalette } from "./ui/CommandPalette";
 import { Settings } from "./ui/Settings";
 import { PhotoImport } from "./ui/PhotoImport";
-import { FolderDialog, MoveDialog, RevisionDialog, RenameDialog } from "./ui/WorkspaceDialogs";
+import {
+  CreateDocumentDialog,
+  FolderDialog,
+  MoveDialog,
+  RevisionDialog,
+  RenameDialog,
+} from "./ui/WorkspaceDialogs";
 import {
   SlateMark,
   IconButton,
@@ -887,6 +893,11 @@ export default function SlateApp() {
           </button>
         </div>
       </Modal>
+      <CreateDocumentDialog
+        value={app.createDialog}
+        onClose={() => app.setCreateDialog(null)}
+        onCreated={app.open}
+      />
       <RenameDialog
         doc={app.renameDoc}
         onClose={() => app.setRenameDoc(null)}

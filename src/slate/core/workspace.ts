@@ -193,8 +193,13 @@ export const workspace = {
       else void write(id);
     }
   },
-  async create(kind: DocumentKind, folderId: string | null = null) {
-    const baseTitle = kind === "notebook" ? "Untitled notebook" : "Untitled note";
+  async create(kind: DocumentKind, folderId: string | null = null, name?: string) {
+    const baseTitle =
+      name === undefined
+        ? kind === "notebook"
+          ? "Untitled notebook"
+          : "Untitled note"
+        : itemName(name);
     let title = baseTitle,
       number = 2;
     while (

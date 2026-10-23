@@ -1,11 +1,12 @@
 import { test, expect, type Page, type CDPSession } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ready, latest } from "./helpers";
+import { ready, latest, nameNewDocument } from "./helpers";
 
 async function notebook(page: Page) {
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await page.getByRole("button", { name: "Hide pages", exact: true }).click();
 }
 

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ready, latest, draw, source } from "./helpers";
+import { ready, latest, draw, source, nameNewDocument } from "./helpers";
 
 async function vim(page: Page) {
   if (!(await page.getByRole("button", { name: "Settings", exact: true }).isVisible())) {
@@ -31,6 +31,7 @@ test("Creation has two choices; line numbers, dark gutters and column layout are
     "Notebook from photos",
   ]);
   await page.getByRole("menuitem", { name: "Markdown", exact: true }).click();
+  await nameNewDocument(page);
   await source(page, "# Lecture\n\nA paragraph.\n\nAnother paragraph.\n");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Dark", exact: true }).click();
@@ -94,6 +95,7 @@ test("Vim edits Markdown, toggles universal numbers and navigates reading mode",
 }) => {
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await source(page, "Alpha\nBeta\n");
   await vim(page);
   await page.locator(".cm-content:visible").click();
@@ -130,6 +132,7 @@ test("Visual tables update cells and equations compose offline without raw LaTeX
 }) => {
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await source(page, "# Physics\n\n");
   await page.getByRole("button", { name: "Insert or edit table", exact: true }).click();
   await page.getByLabel("Table rows").fill("2");
@@ -179,6 +182,7 @@ test("Visual tables update cells and equations compose offline without raw LaTeX
 test("Selection scales and rotates with reversible saved geometry", async ({ page }) => {
   await ready(page);
   await page.keyboard.press("Control+Shift+n");
+  await nameNewDocument(page);
   await draw(page);
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);
   const before = (await latest(page)).pages[0].strokes[0];
@@ -222,6 +226,7 @@ test("Two fingers pan while finger ink is on; double two-finger tap undoes witho
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).tap();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+  await nameNewDocument(page);
   await draw(page, { x: 40, y: 120 }, { x: 220, y: 170 });
   await page.getByRole("button", { name: "Ink options", exact: true }).tap();
   await page
@@ -268,6 +273,7 @@ test("Android keyboard detection leaves soft input ordinary and activates Vim on
   const page = await context.newPage();
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await source(page, "Alpha\n");
   await vim(page);
   await page.reload();

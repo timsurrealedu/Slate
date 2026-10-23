@@ -3,6 +3,14 @@ export async function ready(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Your library", exact: true })).toBeVisible();
 }
+export async function nameNewDocument(page: Page, name?: string) {
+  const dialog = page.getByRole("dialog", { name: /^New (notebook|Markdown)$/ });
+  const notebook = (await dialog.getByRole("textbox", { name: "Notebook name" }).count()) > 0;
+  const input = dialog.getByRole("textbox");
+  await input.fill(name ?? (notebook ? "Untitled notebook" : "Untitled note"));
+  await dialog.getByRole("button", { name: /^Create (notebook|note)$/ }).click();
+  await expect(dialog).toBeHidden();
+}
 export async function documents(page: Page) {
   return page.evaluate(
     () =>

@@ -53,6 +53,7 @@ export function Notebook({
 }) {
   const { preferences } = useWorkspace();
   const [index, setIndex] = useState(0),
+    [pagePull, setPagePull] = useState(0),
     [tool, setTool] = useState<InkTool>("pen"),
     [zoomView, setZoomView] = useState({ zoom: 1 });
   const zoom = zoomView.zoom;
@@ -345,10 +346,19 @@ export function Notebook({
     void workspace.preferences({ paper });
   }
   function add() {
+    insertPage(1);
+  }
+  function insertPage(direction: -1 | 1) {
+    const position = Math.min(index, doc.pages.length - 1) + (direction === 1 ? 1 : 0);
     const pages = [...doc.pages];
-    pages.splice(index + 1, 0, newPage(page?.paper || preferences.paper));
+    pages.splice(position, 0, newPage(page?.paper || preferences.paper));
     workspace.update(doc.id, { pages });
-    setIndex(index + 1);
+    changeIndex(position);
+  }
+  function turnPage(direction: -1 | 1) {
+    const next = index + direction;
+    if (next >= 0 && next < doc.pages.length) changeIndex(next);
+    else insertPage(direction);
   }
   function duplicate() {
     const pages = [...doc.pages];
@@ -479,11 +489,6 @@ export function Notebook({
           <aside className="page-strip" aria-label="Notebook pages">
             <div className="page-strip-heading">
               <span>Pages</span>
-              {doc.kind !== "pdf" && (
-                <IconButton label="Add page" onClick={add}>
-                  <Plus size={16} />
-                </IconButton>
-              )}
             </div>
             {doc.pages.map((p, i) => (
               <ContextActions
@@ -546,16 +551,38 @@ export function Notebook({
                 </button>
               </ContextActions>
             ))}
-            {doc.kind !== "pdf" && (
-              <button className="add-page-thumb" onClick={add}>
-                <Plus size={20} />
-                <span>Add page</span>
-              </button>
-            )}
           </aside>
         )}
         <div className="notebook-paper-area">
           {floatingToolbar && toolbar}
+          {doc.kind !== "pdf" && (
+            <>
+              <button
+                className="notebook-add-page secondary-button"
+                onClick={add}
+                aria-label="Add page"
+              >
+                <Plus size={18} />
+                <span>Add page</span>
+              </button>
+              {pagePull !== 0 && (
+                <div
+                  className="page-pull-hint"
+                  data-side={pagePull > 0 ? "left" : "right"}
+                  data-ready={Math.abs(pagePull) === 2}
+                  role="status"
+                >
+                  {pagePull > 0 ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+                  <span>
+                    {Math.abs(pagePull) === 2 ? "Release to " : "Keep swiping to "}
+                    {(pagePull > 0 ? index === 0 : index === doc.pages.length - 1)
+                      ? "add a page"
+                      : "turn the page"}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
           <div ref={viewport} className="page-viewport">
             {pdfError ? (
               <div className="document-error">
@@ -653,6 +680,15 @@ export function Notebook({
                       onPinch={zoomAt}
                       onPinchStart={startPinch}
                       onPinchEnd={finishPinch}
+                      onPagePull={
+                        doc.kind === "notebook"
+                          ? (progress) => {
+                              const phase = Math.sign(progress) * (Math.abs(progress) >= 1 ? 2 : 1);
+                              setPagePull(phase);
+                            }
+                          : undefined
+                      }
+                      onPageTurn={doc.kind === "notebook" ? turnPage : undefined}
                     />
                     {doc.example && index === 0 && doc.kind !== "pdf" && (
                       <span className="example-page-label">Editable example</span>

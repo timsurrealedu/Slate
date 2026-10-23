@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import { unzipSync, strFromU8 } from "fflate";
 import { PDFDocument } from "pdf-lib";
-import { ready, documents, latest, draw, source } from "./helpers";
+import { ready, documents, latest, draw, source, nameNewDocument } from "./helpers";
 
 test("Markdown keeps its source through all three modes, local images, links and reload", async ({
   page,
@@ -12,6 +12,7 @@ test("Markdown keeps its source through all three modes, local images, links and
   page.on("pageerror", (e) => errors.push(e.message));
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await page.getByLabel("Document title", { exact: true }).fill("Study session");
   const text =
     "# Study session\n\n## Key ideas\nA **clear** explanation with *emphasis* and `inline code`.\n\n- [ ] Review definitions\n- [x] Work through examples\n\nSee [[Linear transformations]] and [[New concept]].\n\n$$\nE = mc^2\n$$\n\n| Quantity | Meaning |\n| --- | --- |\n| E | Energy |\n\n```python\nprint('energy')\n```\n";
@@ -67,6 +68,7 @@ test("Notebook uses recent paper, ink is reversible, pages duplicate and ink sur
   await page.getByRole("button", { name: "Close Problem set 03", exact: true }).click();
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
   await page.getByRole("button", { name: "Paper", exact: true }).click();
   await page.getByRole("button", { name: "Lined", exact: true }).click();
@@ -99,6 +101,7 @@ test("Notebook uses recent paper, ink is reversible, pages duplicate and ink sur
   expect((await latest(page)).pages[0].strokes).toHaveLength(1);
   await expect.poll(visibleInk).toBeGreaterThan(100);
   await page.keyboard.press("Control+Shift+n");
+  await nameNewDocument(page);
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(0);
   expect((await latest(page)).pages[0].paper).toMatchObject({ style: "lined", color: "#fffef6" });
 });
@@ -147,6 +150,7 @@ test("PDF and DOCX imports read locally and annotated exports preserve the sourc
 test("Backup downloads verifiable documents and restores additively", async ({ page }) => {
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await source(page, "# Backup test\n\nImportant local work.");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const download = page.waitForEvent("download");
@@ -168,6 +172,7 @@ test("Keyboard search, folders and Trash complete a recoverable organization flo
   await page.getByLabel("Folder name").fill("Semester three");
   await page.getByRole("button", { name: "Create folder", exact: true }).click();
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await page.getByLabel("Document title", { exact: true }).fill("Revision checklist");
   await source(page, "# Revision checklist\n\nSpectral decomposition is on the exam.");
   await page.keyboard.press("Control+k");
@@ -221,6 +226,7 @@ test("Light and dark desktop and phone layouts pass accessibility and stay withi
   await page.screenshot({ path: "artifacts/phone-library.jpg", type: "jpeg", quality: 85 });
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "artifacts/phone-notebook.jpg", type: "jpeg", quality: 85 });

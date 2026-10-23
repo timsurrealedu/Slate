@@ -1,6 +1,6 @@
 import { test, expect, type Page, type CDPSession } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
-import { ready, latest } from "./helpers";
+import { ready, latest, nameNewDocument } from "./helpers";
 
 for (const stream of [
   "missing-down",
@@ -355,6 +355,7 @@ async function loadedNotebook(page: Page, count: number, pointsPerStroke = 48, p
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas:visible")).toBeVisible();
   await expect.poll(async () => (await latest(page)).revision).toBeGreaterThan(1);
   await page.evaluate(

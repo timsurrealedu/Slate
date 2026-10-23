@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ready, latest, draw, source } from "./helpers";
+import { ready, latest, draw, source, nameNewDocument } from "./helpers";
 test("Live Preview tasks and link completion edit Markdown directly", async ({ page }) => {
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await source(page, "# Tasks\n\n- [ ] Review vectors\n\nMore writing.\n");
   await page.getByRole("button", { name: "Live preview", exact: true }).click();
   await page.getByRole("checkbox", { name: "Complete task", exact: true }).click();
@@ -21,6 +22,7 @@ test("Live Preview tasks and link completion edit Markdown directly", async ({ p
 test("Long-note mode switching preserves reading context", async ({ page }) => {
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   const text =
     "# Long lecture\n\n" +
     Array.from(
@@ -64,6 +66,7 @@ test("Pen pressure survives saving, touch pans by default, finger ink is explici
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).tap();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
   const c = page.locator(".document-pane:not([hidden]) .ink-canvas");
   let b = (await c.boundingBox())!;
@@ -140,6 +143,7 @@ test("Production shell reopens notes and writes ink with the network disabled", 
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await page.getByLabel("Document title", { exact: true }).fill("Offline lecture");
   await source(page, "# Offline lecture\n\nConserved momentum and $p = mv$.\n");
   await context.setOffline(true);
@@ -152,6 +156,7 @@ test("Production shell reopens notes and writes ink with the network disabled", 
   await expect(page.getByRole("option").first()).toContainText("Offline lecture");
   await page.keyboard.press("Escape");
   await page.keyboard.press("Control+Shift+n");
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
   await draw(page);
   await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);

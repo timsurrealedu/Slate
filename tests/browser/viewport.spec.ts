@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { ready } from "./helpers";
+import { ready, nameNewDocument } from "./helpers";
 
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 1440, height: 850 } });
 
@@ -23,6 +23,7 @@ test("tablet library and notebook reach all edges after rotation, cutout changes
 
   await page.getByRole("button", { name: "New note", exact: true }).tap();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+  await nameNewDocument(page);
   await page.getByRole("button", { name: "Hide pages", exact: true }).tap();
   await bounds(page, ".workspace-shell");
   expect((await page.locator(".document-titlebar").boundingBox())!.y).toBe(0);

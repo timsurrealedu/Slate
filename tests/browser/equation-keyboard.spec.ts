@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { MathfieldElement } from "mathlive";
-import { ready, latest, source } from "./helpers";
+import { ready, latest, source, nameNewDocument } from "./helpers";
 
 async function openEquation(page: Page) {
   const formatting = page.getByRole("button", { name: "Formatting", exact: true });
@@ -42,6 +42,7 @@ for (const device of [
       await ready(page);
       await page.getByRole("button", { name: "New note", exact: true }).click();
       await page.getByRole("menuitem", { name: "Markdown", exact: true }).click();
+      await nameNewDocument(page);
       await source(page, "# Keyboard equation\n\n");
       if (process.env.SLATE_PRODUCTION_TEST) {
         await page.evaluate(() => navigator.serviceWorker.ready);
@@ -89,6 +90,7 @@ test.describe("phone dismissal", () => {
     await ready(page);
     await page.getByRole("button", { name: "New note", exact: true }).click();
     await page.getByRole("menuitem", { name: "Markdown", exact: true }).click();
+    await nameNewDocument(page);
     await source(page, "# Android Back\n\nKeep this note.");
     const url = page.url();
     await openEquation(page);
@@ -122,6 +124,7 @@ test.describe("phone dismissal", () => {
     await ready(page);
     await page.getByRole("button", { name: "New note", exact: true }).click();
     await page.getByRole("menuitem", { name: "Markdown", exact: true }).click();
+    await nameNewDocument(page);
     await source(page, "# Keep this note\n\nExisting text.");
     for (const action of ["Cancel", "Close", "Escape", "Outside"]) {
       await openEquation(page);

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ready, latest, draw, source } from "./helpers";
+import { ready, latest, draw, source, nameNewDocument } from "./helpers";
 
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 375, height: 812 } });
 
@@ -137,6 +137,7 @@ test("notebook zoom reaches 1000 percent without blank frames and Fine ink is th
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await expect(page.locator(".workspace-topbar")).toBeHidden();
   await page.getByRole("button", { name: "Hide pages", exact: true }).click();
   await page.getByRole("button", { name: "Pen (P)", exact: true }).click();

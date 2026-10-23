@@ -1,5 +1,5 @@
 import { chromium, expect } from "@playwright/test";
-import { latest, draw, source } from "./helpers.ts";
+import { latest, draw, source, nameNewDocument } from "./helpers.ts";
 const url = process.env.SLATE_TEST_URL;
 if (!url?.startsWith("https://")) throw new Error("Set SLATE_TEST_URL to the deployed HTTPS URL.");
 const browser = await chromium.launch({ args: ["--no-sandbox"] });
@@ -27,6 +27,7 @@ try {
       .toBe(true);
     if (name === "desktop") {
       await page.keyboard.press("Control+n");
+      await nameNewDocument(page);
       await page.getByLabel("Document title", { exact: true }).fill("Release smoke note");
       await source(page, "# Release smoke note\n\nLocal math: $p = mv$.\n");
       await page.getByRole("button", { name: "Reading", exact: true }).click();
@@ -37,7 +38,8 @@ try {
       );
     } else {
       await page.getByRole("button", { name: "New note", exact: true }).tap();
-  await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+      await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+      await nameNewDocument(page);
       await expect(page.locator(".ink-canvas").first()).toBeVisible();
       await draw(page, { x: 40, y: 60 }, { x: 200, y: 120 });
       await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(1);

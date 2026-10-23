@@ -1,12 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { writeFile } from "node:fs/promises";
-import { ready, latest, draw } from "./helpers";
+import { ready, latest, draw, nameNewDocument } from "./helpers";
 
 async function notebook(page: Page) {
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await expect(page.locator(".workspace-topbar-slot")).toBeHidden();
   await page.getByRole("button", { name: "Hide pages", exact: true }).click();
 }

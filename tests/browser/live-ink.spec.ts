@@ -1,10 +1,11 @@
 import { test, expect, type CDPSession, type Page } from "@playwright/test";
-import { ready, latest } from "./helpers";
+import { ready, latest, nameNewDocument } from "./helpers";
 
 async function notebook(page: Page) {
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
   // Let the entry animation and fit-to-width zoom settle before sizing rasters.
   const canvas = page.locator(".document-pane:not([hidden]) .ink-canvas");

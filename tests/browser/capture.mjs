@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { nameNewDocument } from "./helpers.ts";
 import AxeBuilder from "@axe-core/playwright";
 import { writeFileSync, mkdirSync } from "node:fs";
 const url = process.env.SLATE_TEST_URL || "http://localhost:3000/";
@@ -64,6 +65,7 @@ await p.getByRole("button", { name: "Light", exact: true }).tap();
 await p.getByRole("button", { name: "Done", exact: true }).tap();
 await p.getByRole("button", { name: "New note", exact: true }).tap();
 await p.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+await nameNewDocument(p);
 await p.locator(".ink-canvas").waitFor();
 await shot("mobile-notebook");
 writeFileSync("artifacts/accessibility.json", JSON.stringify(checks, null, 2));

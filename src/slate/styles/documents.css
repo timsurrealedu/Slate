@@ -67,9 +67,20 @@
   padding-bottom: 0;
 }
 .document-titlebar .file-title input {
+  min-height: 34px;
   font-size: 13px;
   font-weight: 550;
-  padding: 6px;
+  line-height: 20px;
+  letter-spacing: normal;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.document-titlebar .file-title input:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 .file-title {
   margin: 0;
@@ -869,7 +880,7 @@
 @media (max-width: 760px) {
   .document-titlebar {
     padding: 0 16px;
-    min-height: 46px;
+    min-height: 52px;
   }
   .markdown-toolbar {
     padding: 4px 8px;
@@ -888,7 +899,7 @@
   .document-titlebar {
     padding: 0 11px;
     gap: 3px;
-    min-height: 46px;
+    min-height: 52px;
   }
   .document-titlebar > input {
     font-size: 12px;

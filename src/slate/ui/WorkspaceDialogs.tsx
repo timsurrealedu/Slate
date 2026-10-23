@@ -1,11 +1,86 @@
 import { useEffect, useState } from "react";
 import { Folder, RotateCcw, Clock3 } from "lucide-react";
-import type { SlateDocument, Folder as SlateFolder } from "../core/model";
+import type { DocumentKind, SlateDocument, Folder as SlateFolder } from "../core/model";
 import { getRevisions } from "../core/storage";
 import { workspace } from "../core/workspace";
 import { Modal } from "./shared";
 import { renderMarkdown } from "../markdown/render";
 import { folderName } from "../core/folders";
+export function CreateDocumentDialog({
+  value,
+  onClose,
+  onCreated,
+}: {
+  value: { kind: DocumentKind; folderId: string | null } | null;
+  onClose(): void;
+  onCreated(doc: SlateDocument): void;
+}) {
+  const [name, setName] = useState(""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setName("");
+    setError("");
+  }, [value]);
+  const notebook = value?.kind === "notebook";
+  return (
+    <Modal
+      open={!!value}
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+      title={notebook ? "New notebook" : "New Markdown"}
+      description={notebook ? "Give your notebook a name." : "Give your Markdown note a name."}
+      className="small-modal"
+    >
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!value || !name.trim() || busy) return;
+          setBusy(true);
+          setError("");
+          try {
+            const doc = await workspace.create(value.kind, value.folderId, name);
+            onClose();
+            onCreated(doc);
+          } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Could not create this document.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <label className="input-label">
+          {notebook ? "Notebook name" : "Note name"}
+          <input
+            className="text-input"
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={200}
+            required
+            disabled={busy}
+            aria-invalid={!!error}
+            aria-describedby={error ? "create-document-error" : undefined}
+          />
+        </label>
+        {error && (
+          <p id="create-document-error" className="inline-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="modal-actions">
+          <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" className="primary-button" disabled={busy || !name.trim()}>
+            {busy ? "Creating…" : notebook ? "Create notebook" : "Create note"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 export function FolderDialog({
   value,
   onClose,

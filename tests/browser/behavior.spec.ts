@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ready, latest, source, draw } from "./helpers";
+import { ready, latest, source, draw, nameNewDocument } from "./helpers";
 
 async function openNote(page: Page) {
   await ready(page);
@@ -166,6 +166,7 @@ test("desktop tabs reorder under the pointer and retain order, active note and c
   for (const title of ["Second tab", "Third tab"]) {
     const previous = (await latest(page)).id;
     await page.keyboard.press("Control+n");
+    await nameNewDocument(page);
     await expect.poll(async () => (await latest(page))?.id).not.toBe(previous);
     const heading = page
       .locator(".document-pane:visible")
@@ -228,6 +229,7 @@ test("pen levels use even increments and vector paper and ink remain present at 
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).click();
+  await nameNewDocument(page);
   for (const [index, level] of ["Fine", "Medium", "Bold", "Heavy"].entries()) {
     await page.getByRole("button", { name: "Pen (P)", exact: true }).click();
     await page.getByRole("button", { name: level, exact: true }).click();

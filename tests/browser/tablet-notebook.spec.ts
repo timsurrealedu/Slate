@@ -1,6 +1,6 @@
 import { test, expect, type Page, type CDPSession } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ready, latest, draw } from "./helpers";
+import { ready, latest, draw, nameNewDocument } from "./helpers";
 
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 1440, height: 900 } });
 
@@ -8,6 +8,7 @@ async function notebook(page: Page) {
   await ready(page);
   await page.getByRole("button", { name: "New note", exact: true }).tap();
   await page.getByRole("menuitem", { name: "Notebook", exact: true }).tap();
+  await nameNewDocument(page);
   await page.getByRole("button", { name: "Hide pages", exact: true }).tap();
 }
 async function finger(

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ready, source, latest, documents } from "./helpers";
+import { ready, source, latest, documents, nameNewDocument } from "./helpers";
 
 test("touch long-press drag moves a note", async ({ page }) => {
   await ready(page);
@@ -11,6 +11,7 @@ test("touch long-press drag moves a note", async ({ page }) => {
     .getByRole("button", { name: "Library", exact: true })
     .click();
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await expect(page.getByLabel("Document title", { exact: true })).toBeVisible();
   const note = await latest(page);
   await page
@@ -63,6 +64,7 @@ test("live preview matches reading blocks, edits source, renames the file and ke
   page.on("pageerror", (error) => errors.push(error.message));
   await ready(page);
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   const text =
     "# Lecture\n\nA **clear** paragraph with *emphasis*.\n\n> A quotation.\n\n1. First\n2. Second\n\n---\n\n```js\nconst value = 1;\n```\n\n| Topic | Value |\n| --- | --- |\n| Study | 2 |\n\nEnd.\n";
   await source(page, text);
@@ -192,6 +194,7 @@ test("sidebar resize persists; folders offer note types and restore their delete
     .getByRole("dialog", { name: "New note" })
     .getByRole("button", { name: "Notebook", exact: true })
     .click();
+  await nameNewDocument(page);
   await expect.poll(async () => (await latest(page))?.kind).toBe("notebook");
   const note = await latest(page);
   await navigation.getByRole("button", { name: "Course", exact: true }).click({ button: "right" });
@@ -222,6 +225,7 @@ test("drag files and folders between sidebar, grid and breadcrumbs without allow
     .getByRole("button", { name: "Library", exact: true })
     .click();
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await expect(page.getByLabel("Document title", { exact: true })).toBeVisible();
   const note = await latest(page);
   await page

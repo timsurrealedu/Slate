@@ -8,6 +8,23 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("workspace recovery", () => {
+  it("creates named documents without overwriting duplicate titles and validates before saving", async () => {
+    const first = await workspace.create("note", null, "  Thermodynamics  ");
+    const second = await workspace.create("note", null, "Thermodynamics");
+    const notebook = await workspace.create("notebook", null, "Lecture sketches");
+    expect(first.title).toBe("Thermodynamics");
+    expect(second.title).toBe("Thermodynamics 2");
+    expect(first.id).not.toBe(second.id);
+    expect(notebook.title).toBe("Lecture sketches");
+    expect(notebook.pages).toHaveLength(1);
+    const count = workspace.get().documents.length;
+    await expect(workspace.create("note", null, "bad/name")).rejects.toThrow();
+    await expect(workspace.create("notebook", null, "  ")).rejects.toThrow();
+    expect(workspace.get().documents).toHaveLength(count);
+    const saved = (await storage.readWorkspace()).documents;
+    expect(saved.find((doc) => doc.id === first.id)?.title).toBe(first.title);
+    expect(saved.find((doc) => doc.id === notebook.id)?.title).toBe(notebook.title);
+  });
   it("flushes queued handwriting immediately for close and backup recovery", async () => {
     const doc = await workspace.create("notebook");
     const strokes = Array.from({ length: 50 }, (_, i) => ({

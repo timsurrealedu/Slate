@@ -3,7 +3,7 @@ import { mkdtempSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unzipSync, strFromU8 } from "fflate";
-import { latest, draw } from "../browser/helpers.ts";
+import { latest, draw, nameNewDocument } from "../browser/helpers.ts";
 const profile = mkdtempSync(join(tmpdir(), "slate-desktop-test-"));
 const backup = join(profile, "export.slate.zip");
 const errors = [];
@@ -54,6 +54,7 @@ try {
   expect((await latest(page)).content).toBe("# Desktop heading\n\nKeep the imported body.\n");
   const importedId = (await latest(page)).id;
   await page.keyboard.press("Control+n");
+  await nameNewDocument(page);
   await expect.poll(async () => (await latest(page))?.id).not.toBe(importedId);
   await expect(titleField(page)).toHaveValue((await latest(page)).title);
   await titleField(page).fill("Native persistence");
@@ -105,6 +106,7 @@ try {
   await expect(page.locator(".ML__keyboard")).toHaveCount(0);
   await expect.poll(async () => (await latest(page))?.content).toContain("$$\n123+45=168\n$$");
   await page.keyboard.press("Control+Shift+n");
+  await nameNewDocument(page);
   await expect(page.locator(".ink-canvas").first()).toBeVisible();
   await expect
     .poll(() => page.workers().filter((worker) => worker.url().includes("ink-save.worker-")).length)

@@ -40,6 +40,8 @@ interface Props {
   onPinch?(factor: number, x: number, y: number, previousX: number, previousY: number): void;
   onPinchStart?(x: number, y: number): void;
   onPinchEnd?(immediate?: boolean): void;
+  onPagePull?(progress: number): void;
+  onPageTurn?(direction: -1 | 1): void;
 }
 interface Gesture {
   pointerType: string;
@@ -809,6 +811,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         r.gesture = null;
         r.rect = null;
         r.lastTap = null;
+        p.onPagePull?.(0);
         redrawBase();
       }
       if (e.pointerType === "pen") {
@@ -823,6 +826,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       if (e.pointerType === "touch") {
         r.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (r.touches.size === 2) {
+          p.onPagePull?.(0);
           // A second finger cancels provisional ink; it never commits a stray dot.
           r.gesture = null;
           r.rect = null;
@@ -989,6 +993,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       if (g.mode === "pan") {
         if (viewport) {
           r.pan = { x: g.scrollX - e.clientX + g.clientX, y: g.scrollY - e.clientY + g.clientY };
+          propsRef.current.onPagePull?.(pagePull(g, e));
           schedule();
         }
         return;
@@ -1052,6 +1057,24 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       )
         move(e);
     }
+    function pagePull(g: Gesture, e: PointerEvent) {
+      // Consume horizontal scrolling first. Only a deliberate single-finger pull turns pages.
+      if (
+        !propsRef.current.onPageTurn ||
+        g.pointerType !== "touch" ||
+        g.mode !== "pan" ||
+        !viewport
+      )
+        return 0;
+      const dx = e.clientX - g.clientX,
+        dy = e.clientY - g.clientY;
+      if (Math.abs(dx) < Math.abs(dy) * 1.5) return 0;
+      const extra =
+        dx > 0
+          ? Math.max(0, dx - g.scrollX)
+          : Math.min(0, dx + viewport.scrollWidth - viewport.clientWidth - g.scrollX);
+      return extra / Math.max(120, Math.min(220, viewport.clientWidth * 0.3));
+    }
     function finish(e?: PointerEvent) {
       const r = runtime.current;
       if (e) {
@@ -1085,6 +1108,8 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       }
       const g = r.gesture;
       if (!g || (e && g.id !== e.pointerId)) return;
+      const pull = e?.type === "pointerup" ? pagePull(g, e) : 0;
+      propsRef.current.onPagePull?.(0);
       if (g.pointerType === "pen") r.penUntil = performance.now() + 350;
       if (g.mode === "draw" && g.input) {
         // A cancelled or forced end has no trustworthy position; it ends at the last sample.
@@ -1116,6 +1141,10 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
         status();
       }
       redrawBase();
+      if (Math.abs(pull) >= 1) {
+        r.pan = null;
+        propsRef.current.onPageTurn?.(pull > 0 ? -1 : 1);
+      }
     }
     function cancel(e: PointerEvent) {
       const r = runtime.current;
@@ -1135,6 +1164,7 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       r.lastTap = null;
       r.pinchDistance = 0;
       r.pan = null;
+      propsRef.current.onPagePull?.(0);
       if (r.gesture?.id === e.pointerId) {
         r.gesture = null;
         r.rect = null;
