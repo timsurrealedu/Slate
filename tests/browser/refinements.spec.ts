@@ -25,7 +25,11 @@ test("Creation has two choices; line numbers, dark gutters and column layout are
   await expect(page.locator(".quick-banner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "New Notebook", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "New note", exact: true }).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Markdown", "Notebook"]);
+  await expect(page.getByRole("menuitem")).toHaveText([
+    "Markdown",
+    "Notebook",
+    "Notebook from photos",
+  ]);
   await page.getByRole("menuitem", { name: "Markdown", exact: true }).click();
   await source(page, "# Lecture\n\nA paragraph.\n\nAnother paragraph.\n");
   await page.getByRole("button", { name: "Settings", exact: true }).click();

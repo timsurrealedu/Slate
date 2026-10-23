@@ -16,7 +16,8 @@ import {
   transform,
   type Rect,
 } from "./geometry";
-import { brushElement, brushPlan, stabilizer, straighten, UNIT } from "./flexcil";
+import { brushElement, brushPlan, stabilizer, UNIT } from "./flexcil";
+import { StrokeInput } from "./input";
 import { LiveBrush } from "./live";
 import { MARGIN_RED, paperGeometry } from "./paper";
 export type InkTool = "pen" | "eraser" | "select" | "hand";
@@ -53,26 +54,12 @@ interface Gesture {
   scrollY: number;
   clientX: number;
   clientY: number;
-  rawSamples?: Point[];
-  stabilize?: (point: Point) => Point;
-  straight?: boolean;
+  input?: StrokeInput;
   lasso?: Point[];
   erased?: Point;
 }
 function penContact(e: PointerEvent) {
   return !!(e.buttons & 33) || e.pressure > 0;
-}
-function addSample(g: Gesture, next: Point) {
-  const points = g.stroke!.points,
-    last = points[points.length - 1];
-  // A delayed sample must not draw backwards through already received input.
-  if (next.t < last.t) return;
-  if (g.straight) {
-    points.splice(1, points.length, straighten(points[0], next));
-    return;
-  }
-  const sample = g.stabilize ? g.stabilize(next) : next;
-  if (sample.x !== last.x || sample.y !== last.y || sample.p !== last.p) points.push(sample);
 }
 function FlexcilPaper({ page }: { page: Page }) {
   const g = paperGeometry(page);
@@ -921,12 +908,16 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           pressureSensitive: p.penPressure && e.pointerType === "pen",
           ...(pen.opacity < 1 ? { opacity: pen.opacity } : {}),
         };
-        r.gesture.straight = pen.straight;
         // Flexcil stabilizes pens but never highlighters or straight strokes.
-        if (!marker && !pen.straight && pen.smooth > 0) {
-          r.gesture.stabilize = stabilizer(pen.smooth);
-          r.gesture.stroke.points[0] = r.gesture.stabilize(start);
-        }
+        const stabilize =
+          !marker && !pen.straight && pen.smooth > 0 ? stabilizer(pen.smooth) : undefined;
+        if (stabilize) r.gesture.stroke.points[0] = stabilize(start);
+        // Gaps over six screen pixels (fast, sparse input) are filled every two pixels.
+        r.gesture.input = new StrokeInput(r.gesture.stroke.points, start, {
+          stabilize,
+          straight: pen.straight,
+          spacing: 2 * unit,
+        });
       }
       rasterMode(mode === "draw" || mode === "pan");
       if (mode === "draw") paintInputInk();
@@ -1004,27 +995,13 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       }
       // The parent is a processed summary, not an extra hardware sample.
       const samples = coalesced?.length ? coalesced : [e];
-      const raw = e.type === "pointermove" ? g.rawSamples || [] : [];
-      let rawIndex = 0;
+      let drawn = false;
       for (const sample of samples) {
         if (e.pointerType === "pen" && !penContact(e) && !penContact(sample)) continue;
         const next = point(sample);
-        if (g.mode === "draw") {
-          // Compare hardware samples, not parent dispatch times, when raw and move batches overlap.
-          while (rawIndex < raw.length && raw[rawIndex].t < next.t) rawIndex++;
-          let duplicate = false;
-          for (let i = rawIndex; i < raw.length && raw[i].t === next.t; i++) {
-            const seen = raw[i];
-            if (seen.x === next.x && seen.y === next.y && seen.p === next.p) {
-              rawIndex = i + 1;
-              duplicate = true;
-              break;
-            }
-          }
-          if (duplicate) continue;
-          if (e.type === "pointerrawupdate") (g.rawSamples ??= []).push(next);
-          addSample(g, next);
-        } else if (g.mode === "erase") erase(next.x, next.y);
+        // Raw and move batches overlap; the input drops samples it has already received.
+        if (g.mode === "draw") drawn = g.input!.add(next) || drawn;
+        else if (g.mode === "erase") erase(next.x, next.y);
         else if (g.mode === "select") {
           const lasso = g.lasso!,
             last = lasso[lasso.length - 1];
@@ -1058,14 +1035,13 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
           );
         }
       }
-      if (e.type === "pointermove") g.rawSamples = undefined;
       // A barrel button can remain pressed across nib lifts, yielding move instead of up/down.
       if (e.pointerType === "pen" && !penContact(e)) {
         finish();
         return;
       }
       // Paint only new ink now; completed ink, vectors and UI work remain frame-batched.
-      if (g.mode === "draw") paintInputInk();
+      if (drawn) paintInputInk();
       schedule();
     }
     function raw(event: Event) {
@@ -1110,12 +1086,9 @@ export const InkSurface = forwardRef<InkHandle, Props>(function InkSurface(props
       const g = r.gesture;
       if (!g || (e && g.id !== e.pointerId)) return;
       if (g.pointerType === "pen") r.penUntil = performance.now() + 350;
-      if (e?.type === "pointerup" && g.mode === "draw" && g.stroke) {
-        const last = g.stroke.points[g.stroke.points.length - 1],
-          next = point(e);
-        // Lift-off reports zero pressure; keep the contact's width at its final coordinate.
-        if (!e.pressure) next.p = last.p;
-        if (next.x !== last.x || next.y !== last.y) addSample(g, next);
+      if (g.mode === "draw" && g.input) {
+        // A cancelled or forced end has no trustworthy position; it ends at the last sample.
+        g.input.end(e?.type === "pointerup" ? point(e) : undefined);
         paintInputInk();
       }
       r.gesture = null;

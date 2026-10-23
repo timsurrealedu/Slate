@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, createRef } from "react";
 import { workspace, useVisibleWorkspace } from "./core/workspace";
 import { parentFolder } from "./core/folders";
-import { headings, newId, type SlateDocument, type DocumentKind, type Folder } from "./core/model";
+import {
+  headings,
+  makeDocument,
+  newId,
+  type SlateDocument,
+  type DocumentKind,
+  type Folder,
+  type Page,
+} from "./core/model";
 import { importFile, exportDocument, loadPdf } from "./documents/files";
 import { putAsset } from "./core/storage";
 import type { FlexcilReport } from "./import/flexcil/importer";
@@ -39,12 +47,14 @@ export function useSlateApp() {
     [moveDoc, setMoveDoc] = useState<SlateDocument | null>(null),
     [historyDoc, setHistoryDoc] = useState<SlateDocument | null>(null),
     [busy, setBusy] = useState(""),
+    [photos, setPhotos] = useState<File[] | null>(null),
     [canInstall, setCanInstall] = useState(false),
     [update, setUpdate] = useState<ServiceWorker | null>(null);
   const [flexcilReport, setFlexcilReport] = useState<FlexcilReport | null>(null);
   const importController = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null),
     imageInput = useRef<HTMLInputElement>(null),
+    photoInput = useRef<HTMLInputElement>(null),
     installEvent = useRef<InstallEvent | null>(null),
     editorRefs = useRef(new Map<string, React.RefObject<MarkdownHandle | null>>()),
     toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -402,6 +412,32 @@ export function useSlateApp() {
     }
     if (imageInput.current) imageInput.current.value = "";
   }
+  // Photos of handwritten paper are reviewed in a dialog, then become one notebook page each.
+  function importPhotos(files: FileList | null) {
+    if (files?.length) setPhotos(Array.from(files));
+    if (photoInput.current) photoInput.current.value = "";
+  }
+  async function createFromPhotos(title: string, pages: Page[]) {
+    try {
+      const doc = makeDocument(
+        "notebook",
+        title,
+        view.startsWith("folder:") ? view.slice(7) : null,
+      );
+      doc.pages = pages;
+      open(await workspace.importDocument(doc));
+      setPhotos(null);
+      notify(
+        "Created “" +
+          title +
+          "” from " +
+          pages.length +
+          (pages.length === 1 ? " photo" : " photos"),
+      );
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Could not create this notebook.", undefined, true);
+    }
+  }
   async function exportSelected(annotated = false) {
     if (!selected) return;
     try {
@@ -523,6 +559,11 @@ export function useSlateApp() {
     update,
     fileInput,
     imageInput,
+    photoInput,
+    photos,
+    setPhotos,
+    importPhotos,
+    createFromPhotos,
     notify,
     getEditor,
     open,

@@ -170,3 +170,56 @@ test("A tapped dot stays visible after the vector layer takes over", async ({ pa
   const blank = await page.screenshot({ clip: { x: x + 60, y: y + 60, width: 12, height: 12 } });
   expect(dot.equals(blank)).toBe(false);
 });
+
+test("Fast sparse pen strokes keep their full length, curves and order", async ({ page }) => {
+  const b = (await notebook(page))!;
+  const session = await page.context().newCDPSession(page);
+  const scale = await page.evaluate(() => {
+    const c = document.querySelector<HTMLCanvasElement>(
+      ".document-pane:not([hidden]) .ink-canvas",
+    )!;
+    return 794 / c.getBoundingClientRect().width;
+  });
+  // A flick: five samples across 500 pixels, then the lift.
+  const x = b.x + 100,
+    y = b.y + 160;
+  await pen(session, "mousePressed", x, y, 0.5);
+  for (let i = 1; i <= 4; i++) await pen(session, "mouseMoved", x + i * 100, y, 0.5);
+  await pen(session, "mouseReleased", x + 500, y, 0);
+  // A loop drawn with twelve samples.
+  const cx = b.x + 300,
+    cy = b.y + 420;
+  const at = (i: number) => [
+    cx + 90 * Math.cos((i / 12) * Math.PI * 2),
+    cy + 90 * Math.sin((i / 12) * Math.PI * 2),
+  ];
+  await pen(session, "mousePressed", at(0)[0], at(0)[1], 0.5);
+  for (let i = 1; i < 12; i++) await pen(session, "mouseMoved", at(i)[0], at(i)[1], 0.5);
+  await pen(session, "mouseReleased", at(12)[0], at(12)[1], 0);
+  await expect.poll(async () => (await latest(page))?.pages[0].strokes.length).toBe(2);
+  const [line, loop] = (await latest(page))!.pages[0].strokes as {
+    points: { x: number; y: number; t: number }[];
+  }[];
+  const end = line.points.at(-1)!;
+  expect(end.x).toBeCloseTo((x + 500 - b.x) * scale, 1);
+  expect(end.y).toBeCloseTo((y - b.y) * scale, 1);
+  for (const stroke of [line, loop])
+    for (let i = 1; i < stroke.points.length; i++) {
+      const a = stroke.points[i - 1],
+        c = stroke.points[i];
+      expect(c.t).toBeGreaterThanOrEqual(a.t);
+      expect(a.x === c.x && a.y === c.y).toBe(false);
+    }
+  let sharpest = 0;
+  const p = loop.points;
+  for (let i = 2; i < p.length; i++) {
+    let turn = Math.abs(
+      Math.atan2(p[i].y - p[i - 1].y, p[i].x - p[i - 1].x) -
+        Math.atan2(p[i - 1].y - p[i - 2].y, p[i - 1].x - p[i - 2].x),
+    );
+    if (turn > Math.PI) turn = Math.PI * 2 - turn;
+    sharpest = Math.max(sharpest, (turn * 180) / Math.PI);
+  }
+  // Chords between twelve samples would turn 30 degrees at every sample.
+  expect(sharpest).toBeLessThan(10);
+});

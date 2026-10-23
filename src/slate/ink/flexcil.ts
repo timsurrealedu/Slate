@@ -109,17 +109,41 @@ function range(c: Resolver, base: number) {
     b = Math.max(0, base);
   return { min, max: c.extra > 0 ? Math.max(c.extra + min, b, min) : Math.max(min, b) };
 }
+// Width models run one point at a time so a growing stroke never recomputes its settled samples.
+// `push` commits a point that newer input follows; `last` resolves the newest point as the lift
+// would, without changing state, because the newest point is the only one that can still change.
+interface Track {
+  out: Sample[];
+  push(point: Point): void;
+  last(point: Point): Sample | null;
+}
+function track<S extends object>(
+  out: Sample[],
+  state: S,
+  step: (s: S, cur: Point, final: boolean) => Sample | null,
+): Track {
+  return {
+    out,
+    push(point) {
+      const sample = step(state, point, false);
+      if (sample) out.push(sample);
+    },
+    last: (point) => step({ ...state }, point, true),
+  };
+}
+interface ResolverState {
+  smoothed: number;
+  last: number;
+}
 function resolver(c: Resolver, base: number, pressure: boolean) {
   const { min, max } = range(c, base);
-  let smoothed = 0,
-    last = 0;
-  const resolve = (prev: Point | null, p: number, cur: Point | null) => {
+  return (st: ResolverState, prev: Point | null, p: number, cur: Point | null) => {
     let force = 1;
     if (pressure) {
       p = Math.max(0, p);
       force = p <= c.lo ? 0 : p >= c.hi ? 1 : clamp((p - c.lo) * (1 / (c.hi - c.lo)), 0, 1);
-      force = prev ? clamp(force * c.alpha + (1 - c.alpha) * smoothed, 0, 1) : force;
-      smoothed = force;
+      force = prev ? clamp(force * c.alpha + (1 - c.alpha) * st.smoothed, 0, 1) : force;
+      st.smoothed = force;
     }
     let pace = 1;
     if (prev && cur) {
@@ -134,137 +158,124 @@ function resolver(c: Resolver, base: number, pressure: boolean) {
         );
     }
     let width = (clamp((max - min) * pace + min, min, max) - min) * force + min;
-    if (last > 0 && prev && cur) {
-      const ref = Math.max(last, min);
+    if (st.last > 0 && prev && cur) {
+      const ref = Math.max(st.last, min);
       const step =
         clamp(10 / (Math.max(0.01, base) * 0.38 + 10), 0.14, 1) *
         (clamp(dist(cur, prev) / (2.2 * ref + 0.001), 0, 1) * 0.48 + 0.02) *
         ref;
-      if (width - last > 1.1 * step) width = last + 1.1 * step;
-      else if (width - last < -step) width = last - step;
+      if (width - st.last > 1.1 * step) width = st.last + 1.1 * step;
+      else if (width - st.last < -step) width = st.last - step;
     }
-    return (last = clamp(width, min, max));
+    return (st.last = clamp(width, min, max));
   };
-  return Object.assign(resolve, { seed: (width: number) => (last = width) });
 }
 // VectorPenDrawer (fountain): its own pressure and velocity width ramp.
-function fountain(points: Point[], w: number, pressure: boolean): Sample[] {
-  let B = w,
-    A = 0,
-    H = 0,
-    I = 0,
-    K = 0,
-    J = false;
+interface FountainState {
+  B: number;
+  A: number;
+  H: number;
+  I: number;
+  K: number;
+  J: boolean;
+  prev: Point;
+}
+function fountain(first: Point, w: number, pressure: boolean): Track {
   const pressureMin = w / 8,
     speedMin = w / 12;
-  const settle = (next: number) => {
-    if ((next - B > 0 && I < 0) || (next - B < 0 && I > 0)) next = B;
+  const settle = (s: FountainState, next: number) => {
+    if ((next - s.B > 0 && s.I < 0) || (next - s.B < 0 && s.I > 0)) next = s.B;
     return next;
   };
-  const velocityWidth = (v: number, travel: number) => {
-    H++;
-    if (B > 0.9 * w && travel < B) return B;
+  const velocityWidth = (s: FountainState, v: number, travel: number) => {
+    s.H++;
+    if (s.B > 0.9 * w && travel < s.B) return s.B;
     const reach = w - speedMin,
       up = reach / 8;
     let down = up;
-    if (H < 3) {
+    if (s.H < 3) {
       v *= 0.2;
       down = reach / 32;
-    } else if (H < 5) {
+    } else if (s.H < 5) {
       v *= 0.6;
       down = reach / 16;
     }
-    const next = settle(Math.min(w, B + up, Math.max(w / (v + 1), speedMin, B - down)));
-    I = next - B;
-    return (B = next);
+    const next = settle(s, Math.min(w, s.B + up, Math.max(w / (v + 1), speedMin, s.B - down)));
+    s.I = next - s.B;
+    return (s.B = next);
   };
-  const width = (v: number, travel: number, p: number) => {
-    if (!pressure || J) return velocityWidth(v, travel);
-    H++;
-    if (p === 1 && ++K > 3 && H > 4) J = true;
-    let next = settle(Math.max(pressureMin, w * Math.min(p / clamp(v, 0.66, 1.33) + 0.1, 1)));
-    if (H < 2) I = 0;
+  const width = (s: FountainState, v: number, travel: number, p: number) => {
+    if (!pressure || s.J) return velocityWidth(s, v, travel);
+    s.H++;
+    if (p === 1 && ++s.K > 3 && s.H > 4) s.J = true;
+    let next = settle(s, Math.max(pressureMin, w * Math.min(p / clamp(v, 0.66, 1.33) + 0.1, 1)));
+    if (s.H < 2) s.I = 0;
     else {
-      const div = H < 4 ? 32 : H < 6 ? 16 : 12;
+      const div = s.H < 4 ? 32 : s.H < 6 ? 16 : 12;
       next = Math.min(
         w,
-        B + (w - pressureMin) / div,
-        Math.max(next, speedMin, B - (w - speedMin) / div),
+        s.B + (w - pressureMin) / div,
+        Math.max(next, speedMin, s.B - (w - speedMin) / div),
       );
-      I = next - B;
+      s.I = next - s.B;
     }
-    return (B = next);
+    return (s.B = next);
   };
-  const out: Sample[] = [];
-  let prev = points[0];
-  out.push({ x: prev.x, y: prev.y, t: prev.t, w: pressure ? width(1, 1, prev.p) : w });
-  for (let i = 1; i < points.length; i++) {
-    const cur = points[i],
-      last = out[out.length - 1],
+  const state: FountainState = { B: w, A: 0, H: 0, I: 0, K: 0, J: false, prev: first };
+  const out: Sample[] = [
+    { x: first.x, y: first.y, t: first.t, w: pressure ? width(state, 1, 1, first.p) : w },
+  ];
+  return track(out, state, (s, cur, final) => {
+    const last = out[out.length - 1],
       reach = last.w / 8;
     // Samples inside the nib's last eighth are ignored until the lift.
-    if (
-      i < points.length - 1 &&
-      Math.abs(cur.x - last.x) < reach &&
-      Math.abs(cur.y - last.y) < reach
-    )
-      continue;
-    B = last.w;
-    const v = dist(cur, prev) / elapsed(cur, prev);
-    A = 0.6 * A + 0.4 * v;
-    out.push({ x: cur.x, y: cur.y, t: cur.t, w: width(A, dist(cur, prev), cur.p) });
-    prev = cur;
-  }
-  return out;
+    if (!final && Math.abs(cur.x - last.x) < reach && Math.abs(cur.y - last.y) < reach) return null;
+    s.B = last.w;
+    const v = dist(cur, s.prev) / elapsed(cur, s.prev);
+    s.A = 0.6 * s.A + 0.4 * v;
+    const sample = { x: cur.x, y: cur.y, t: cur.t, w: width(s, s.A, dist(cur, s.prev), cur.p) };
+    s.prev = cur;
+    return sample;
+  });
 }
 // SlantedFountainPenDrawer input: first width leans to the maximum; jitter is filtered.
-function calligraphy(points: Point[], w: number, pressure: boolean): Sample[] {
+function calligraphy(first: Point, w: number, pressure: boolean): Track {
   const resolve = resolver(INK, w, pressure),
     { min, max } = range(INK, w);
-  const first = points[0],
-    initial = resolve(null, first.p, null);
-  const start = resolve.seed(clamp((max - initial) * 0.6 + initial, min, max));
+  const widths: ResolverState = { smoothed: 0, last: 0 };
+  const initial = resolve(widths, null, first.p, null);
+  const start = (widths.last = clamp((max - initial) * 0.6 + initial, min, max));
   const out: Sample[] = [{ x: first.x, y: first.y, t: first.t, w: start }];
-  let prev = first,
-    held = 0;
-  for (let i = 1; i < points.length; i++) {
-    const cur = points[i],
-      last = out[out.length - 1],
-      final = i === points.length - 1;
-    if (cur.x === last.x && cur.y === last.y) continue;
-    const reach = Math.max(start * 0.09, 0.4);
-    if (!final && (cur.x - last.x) ** 2 + (cur.y - last.y) ** 2 < reach * reach && ++held < 6)
-      continue;
-    held = 0;
+  const reach = Math.max(start * 0.09, 0.4);
+  return track(out, { ...widths, prev: first, held: 0 }, (s, cur, final) => {
+    const last = out[out.length - 1];
+    if (cur.x === last.x && cur.y === last.y) return null;
+    if (!final && (cur.x - last.x) ** 2 + (cur.y - last.y) ** 2 < reach * reach && ++s.held < 6)
+      return null;
+    s.held = 0;
     // The lift keeps the previous width rather than resolving a zero-pressure sample.
-    out.push({ x: cur.x, y: cur.y, t: cur.t, w: final ? last.w : resolve(prev, cur.p, cur) });
-    prev = cur;
-  }
-  return out;
+    const w = final ? last.w : resolve(s, s.prev, cur.p, cur);
+    s.prev = cur;
+    return { x: cur.x, y: cur.y, t: cur.t, w };
+  });
 }
 // TextureFountainPenDrawer input: a curvature-driven nib lag, then a constant graphite width.
-function pencil(points: Point[], w: number): Sample[] {
-  const out: Sample[] = [{ x: points[0].x, y: points[0].y, t: points[0].t, w }];
-  const timed: Sample[] = [out[0]];
-  let Q = 0,
-    R = 0,
-    S = 1;
-  for (let i = 1; i < points.length; i++) {
-    const cur = points[i],
-      last = out[out.length - 1];
-    if (cur.x === last.x && cur.y === last.y) continue;
+function pencil(first: Point, w: number): Track {
+  const out: Sample[] = [{ x: first.x, y: first.y, t: first.t, w }];
+  return track(out, { Q: 0, R: 0, S: 1 }, (s, cur) => {
+    const last = out[out.length - 1];
+    if (cur.x === last.x && cur.y === last.y) return null;
     let x = cur.x,
       y = cur.y;
-    if (timed.length < 2) {
-      Q *= 0.55;
-      R *= 0.55;
+    if (out.length < 2) {
+      s.Q *= 0.55;
+      s.R *= 0.55;
     } else {
-      const a = timed[timed.length - 2],
-        b = timed[timed.length - 1];
-      const ux = b.x - a.x,
-        uy = b.y - a.y,
-        vx = cur.x - b.x,
-        vy = cur.y - b.y;
+      const a = out[out.length - 2];
+      const ux = last.x - a.x,
+        uy = last.y - a.y,
+        vx = cur.x - last.x,
+        vy = cur.y - last.y;
       const lu = Math.hypot(ux, uy),
         lv = Math.hypot(vx, vy);
       if (lu > 0.001 && lv > 0.001) {
@@ -272,13 +283,13 @@ function pencil(points: Point[], w: number): Sample[] {
           dy = vy / lv;
         const dot = clamp((ux / lu) * dx + (uy / lu) * dy, -1, 1);
         if (dot < 0.1) {
-          Q *= 0.62;
-          R *= 0.62;
+          s.Q *= 0.62;
+          s.R *= 0.62;
         } else {
           const cross = (ux / lu) * dy - (uy / lu) * dx,
             turn = Math.abs(cross);
           const bend = clamp((1 - dot) * 0.5, 0, 1),
-            haste = clamp((speed(cur, b) - 0.55) / 2.2, 0, 1);
+            haste = clamp((speed(cur, last) - 0.55) / 2.2, 0, 1);
           const lag =
             turn < 0.07 || haste <= 0
               ? 0
@@ -294,30 +305,31 @@ function pencil(points: Point[], w: number): Sample[] {
                 );
           if (lag <= 0.001) {
             const decay = turn < 0.07 ? 0.74 : haste <= 0 ? 0.78 : 0.8;
-            Q *= decay;
-            R *= decay;
+            s.Q *= decay;
+            s.R *= decay;
           } else {
-            if (turn >= 0.12) S = cross >= 0 ? 1 : -1;
-            const side = S >= 0 ? -1 : 1,
+            if (turn >= 0.12) s.S = cross >= 0 ? 1 : -1;
+            const side = s.S >= 0 ? -1 : 1,
               blend = clamp(bend * 0.16 + haste * 0.26 + 0.14, 0.14, 0.46);
-            Q = -dy * side * lag * blend + Q * (1 - blend);
-            R = dx * side * lag * blend + R * (1 - blend);
-            const size = Math.hypot(Q, R);
+            s.Q = -dy * side * lag * blend + s.Q * (1 - blend);
+            s.R = dx * side * lag * blend + s.R * (1 - blend);
+            const size = Math.hypot(s.Q, s.R);
             if (size > w * 0.4) {
-              Q *= (w * 0.4) / size;
-              R *= (w * 0.4) / size;
+              s.Q *= (w * 0.4) / size;
+              s.R *= (w * 0.4) / size;
             }
           }
-          x += Q;
-          y += R;
+          x += s.Q;
+          y += s.R;
         }
       }
     }
-    const sample = { x, y, t: cur.t, w };
-    out.push(sample);
-    timed.push(sample);
-  }
-  return out;
+    return { x, y, t: cur.t, w };
+  });
+}
+function constant(first: Point, w: number): Track {
+  const out: Sample[] = [{ x: first.x, y: first.y, t: first.t, w }];
+  return track(out, {}, (_, cur) => ({ x: cur.x, y: cur.y, t: cur.t, w }));
 }
 
 // ---------------------------------------------------------------- geometry
@@ -364,29 +376,33 @@ interface Segment {
   wc: number;
   wb: number;
 }
-function spline(s: Sample[]): Segment[] {
-  if (s.length < 2) return [];
-  const out: Segment[] = [];
-  const mid = (i: number) => ({
-    x: (s[i].x + s[i + 1].x) / 2,
-    y: (s[i].y + s[i + 1].y) / 2,
-    w: (s[i].w + s[i + 1].w) / 2,
+// Segment i of the spline through samples `s`: segment 0 leads in from the first sample, the
+// last segment is the straight tail to the newest sample, and those between pass through each
+// sample from midpoint to midpoint. Segments before `s.length - 2` never involve the newest sample.
+function segment(s: Sample[], i: number): Segment {
+  const mid = (j: number) => ({
+    x: (s[j].x + s[j + 1].x) / 2,
+    y: (s[j].y + s[j + 1].y) / 2,
+    w: (s[j].w + s[j + 1].w) / 2,
   });
-  let m = mid(0);
-  out.push({
-    ax: s[0].x,
-    ay: s[0].y,
-    cx: (s[0].x + m.x) / 2,
-    cy: (s[0].y + m.y) / 2,
-    bx: m.x,
-    by: m.y,
-    wa: s[0].w,
-    wc: (s[0].w + m.w) / 2,
-    wb: m.w,
-  });
-  for (let i = 1; i < s.length - 1; i++) {
+  if (i === 0) {
+    const m = mid(0);
+    return {
+      ax: s[0].x,
+      ay: s[0].y,
+      cx: (s[0].x + m.x) / 2,
+      cy: (s[0].y + m.y) / 2,
+      bx: m.x,
+      by: m.y,
+      wa: s[0].w,
+      wc: (s[0].w + m.w) / 2,
+      wb: m.w,
+    };
+  }
+  const m = mid(i - 1);
+  if (i < s.length - 1) {
     const next = mid(i);
-    out.push({
+    return {
       ax: m.x,
       ay: m.y,
       cx: s[i].x,
@@ -396,12 +412,11 @@ function spline(s: Sample[]): Segment[] {
       wa: m.w,
       wc: s[i].w,
       wb: next.w,
-    });
-    m = next;
+    };
   }
   // The tail always reaches the newest sample, including a two-sample stroke.
-  const end = s[s.length - 1];
-  out.push({
+  const end = s[i];
+  return {
     ax: m.x,
     ay: m.y,
     cx: (m.x + end.x) / 2,
@@ -411,8 +426,7 @@ function spline(s: Sample[]): Segment[] {
     wa: m.w,
     wc: (m.w + end.w) / 2,
     wb: end.w,
-  });
-  return out;
+  };
 }
 function at(g: Segment, t: number) {
   const u = 1 - t;
@@ -578,14 +592,42 @@ export interface BrushPlan {
   draw(from: number, to: number, path?: CanvasPath): string;
   bounds(from: number, to: number): PageRect;
 }
+const scaled = (p: Point): Point => ({ ...p, x: p.x / UNIT, y: p.y / UNIT });
+function begin(stroke: Stroke): Track {
+  const w = stroke.width / UNIT,
+    first = scaled(stroke.points[0]),
+    pressure = stroke.pressureSensitive !== false;
+  if (stroke.brush === "fountain") return fountain(first, w, pressure);
+  if (stroke.brush === "calligraphy") return calligraphy(first, w, pressure);
+  if (stroke.brush === "pencil") return pencil(first, w);
+  return constant(first, w);
+}
+interface Progress {
+  track: Track;
+  // Points committed to the track; the newest point is resolved separately.
+  count: number;
+  tail: Point;
+  segments: Segment[];
+}
+const progress = new WeakMap<Stroke, Progress>();
+// Live strokes only append points or replace the newest one, so each input event resolves its
+// new points and segments instead of the whole stroke.
+function resolve(stroke: Stroke) {
+  const points = stroke.points;
+  let p = progress.get(stroke);
+  if (!p || p.count > points.length - 1 || points[p.count - 1] !== p.tail) {
+    p = { track: begin(stroke), count: 1, tail: points[0], segments: [] };
+    progress.set(stroke, p);
+  }
+  for (; p.count < points.length - 1; p.count++) p.track.push(scaled(points[p.count]));
+  p.tail = points[p.count - 1];
+  const settled = p.track.out;
+  for (let i = p.segments.length; i < settled.length - 1; i++) p.segments.push(segment(settled, i));
+  const newest = points.length > 1 ? p.track.last(scaled(points[points.length - 1])) : null;
+  return { s: newest ? settled.concat(newest) : settled.slice(), settled: p.segments };
+}
 export function samples(stroke: Stroke): Sample[] {
-  const w = stroke.width / UNIT;
-  const points = stroke.points.map((p) => ({ ...p, x: p.x / UNIT, y: p.y / UNIT }));
-  const pressure = stroke.pressureSensitive !== false;
-  if (stroke.brush === "fountain") return fountain(points, w, pressure);
-  if (stroke.brush === "calligraphy") return calligraphy(points, w, pressure);
-  if (stroke.brush === "pencil") return pencil(points, w);
-  return points.map((p) => ({ x: p.x, y: p.y, t: p.t, w }));
+  return resolve(stroke).s;
 }
 const plans = new WeakMap<Stroke, { count: number; last: Point; plan: BrushPlan }>();
 export function brushPlan(stroke: Stroke): BrushPlan {
@@ -594,11 +636,16 @@ export function brushPlan(stroke: Stroke): BrushPlan {
   if (cached && cached.count === stroke.points.length && cached.last === last) return cached.plan;
   const brush = stroke.brush as Brush,
     width = stroke.width;
-  let s = samples(stroke);
+  const resolved = resolve(stroke);
+  let s = resolved.s,
+    segments: Segment[] = [];
   // A held nib that only changed pressure is a dot at its widest sample.
   if (s.every((p) => Math.abs(p.x - s[0].x) < 0.01 && Math.abs(p.y - s[0].y) < 0.01))
     s = [{ ...s[0], w: Math.max(...s.map((p) => p.w)) }];
-  const segments = spline(s);
+  else {
+    segments = resolved.settled.slice();
+    for (let i = segments.length; i < s.length; i++) segments.push(segment(s, i));
+  }
   const marker = brush === "highlighter" || brush === "marker";
   const shape = brush === "fountain" ? ribbon : brush === "calligraphy" ? slanted : centerline;
   const plan: BrushPlan = {

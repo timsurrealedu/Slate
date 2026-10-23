@@ -227,7 +227,8 @@ test("zoom buttons and wheel reach 1000 percent with accurate ink coordinates an
   expect(points[0].x).toBeCloseTo(start.x, 3);
   expect(points.at(-1).x).toBeCloseTo(end.x, 3);
   expect(points.at(-1).y).toBeCloseTo(end.y, 3);
-  await expect(page.locator(".ink-vector:visible g path")).toHaveAttribute("d", /a/);
+  // Ballpoint ink is a quadratic centerline (Flexcil LinearPenDrawer).
+  await expect(page.locator(".ink-vector:visible g path")).toHaveAttribute("d", /Q/);
   await page.screenshot({ path: "artifacts/notebook-1000-percent.png" });
   await page.getByTitle("Fit page width", { exact: true }).click();
   await expect(page.locator(".zoom-control")).toContainText("100%");

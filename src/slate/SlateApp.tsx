@@ -13,6 +13,7 @@ import { DocumentView } from "./ui/DocumentView";
 import { ContextPanel } from "./ui/ContextPanel";
 import { CommandPalette } from "./ui/CommandPalette";
 import { Settings } from "./ui/Settings";
+import { PhotoImport } from "./ui/PhotoImport";
 import { FolderDialog, MoveDialog, RevisionDialog, RenameDialog } from "./ui/WorkspaceDialogs";
 import {
   SlateMark,
@@ -33,6 +34,7 @@ import {
   Upload,
   FileText,
   NotebookPen,
+  Camera,
   Star,
   MoreHorizontal,
   Download,
@@ -398,6 +400,11 @@ export default function SlateApp() {
                       label: "Notebook",
                       icon: <NotebookPen size={17} />,
                       onClick: () => void app.create("notebook"),
+                    },
+                    {
+                      label: "Notebook from photos",
+                      icon: <Camera size={17} />,
+                      onClick: () => app.photoInput.current?.click(),
                     },
                   ]}
                 />
@@ -774,6 +781,21 @@ export default function SlateApp() {
         className="sr-only"
         aria-label="Import local image"
         onChange={(e) => void app.importImage(e.target.files?.[0])}
+      />
+      <input
+        hidden
+        type="file"
+        ref={app.photoInput}
+        multiple
+        accept="image/*"
+        className="sr-only"
+        aria-label="Import handwriting photos"
+        onChange={(e) => app.importPhotos(e.target.files)}
+      />
+      <PhotoImport
+        files={app.photos}
+        onClose={() => app.setPhotos(null)}
+        onCreate={app.createFromPhotos}
       />
       <Modal
         open={!!app.flexcilReport}

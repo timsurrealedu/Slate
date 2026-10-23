@@ -1233,8 +1233,17 @@ test("a canceled pen preserves received ink without inventing a cancellation end
   });
   await lift(session, box.x + 200, box.y + 155);
   await expect.poll(async () => (await storedInkSummary(page)).count).toBe(1);
-  const stroke = (await latest(page)).pages[0].strokes[0];
-  expect(stroke.points).toHaveLength(3);
+  const doc = await latest(page),
+    stroke = doc.pages[0].strokes[0],
+    scale = doc.pages[0].width / box.width,
+    scaleY = doc.pages[0].height / box.height;
+  // Sparse samples are joined by a fitted curve, but nothing reaches toward the cancel position.
+  expect(stroke.points.at(-1).x).toBeCloseTo(200 * scale, 5);
+  expect(stroke.points.at(-1).y).toBeCloseTo(155 * scaleY, 5);
+  for (const p of stroke.points) {
+    expect(p.x).toBeLessThanOrEqual(200 * scale + 1e-6);
+    expect(p.y).toBeLessThanOrEqual(171 * scaleY);
+  }
   await page.reload();
   expect((await latest(page)).pages[0].strokes[0]).toEqual(stroke);
 });

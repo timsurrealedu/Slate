@@ -801,3 +801,67 @@
     min-height: 42px;
   }
 }
+.photo-import.modal-content {
+  width: min(760px, calc(100vw - 32px));
+}
+.photo-import-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.photo-import-preview figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.photo-import-preview img,
+.photo-import-ink,
+.photo-import-pending {
+  width: 100%;
+  max-height: 46dvh;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.photo-import-ink {
+  height: auto;
+  object-fit: contain;
+}
+.photo-import-pending {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 4;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.photo-import-preview figcaption {
+  font-size: 11px;
+  color: var(--muted);
+}
+.photo-import-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.photo-import-error {
+  color: var(--danger);
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .photo-import-preview {
+    grid-template-columns: 1fr;
+  }
+  .photo-import-preview img,
+  .photo-import-ink,
+  .photo-import-pending {
+    max-height: 32dvh;
+  }
+}
